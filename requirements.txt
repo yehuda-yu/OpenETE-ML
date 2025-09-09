@@ -1,0 +1,17 @@
+openpyxl
+streamlit
+pandas
+scikit-learn
+scipy
+matplotlib
+numpy
+seaborn
+plotly
+lazypredict == 0.2.12
+lightgbm
+xgboost
+shap
+altair<5
+fancyimpute>=0.7.0
+statsmodels>=0.13.5
+loguru>=0.7.0
