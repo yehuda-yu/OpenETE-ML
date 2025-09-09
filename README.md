@@ -6,7 +6,7 @@
 
 **Access the app online:**
 
-👉 **[Launch OpenETE-ML in your browser](https://openete-ml.streamlit.app/)**
+👉 **[Launch OpenETE-ML in your browser]https://openete-ml-origin.streamlit.app/)**
 
 No installation or downloads required—just open the link and start building models!
 
