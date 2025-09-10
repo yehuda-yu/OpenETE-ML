@@ -139,6 +139,12 @@ ML_METHODS_INFO = {
         "link": "https://en.wikipedia.org/wiki/Feature_selection"
     },
     
+    # Cross-Validation
+    "Cross-Validation": {
+        "description": "A technique to assess model performance by splitting data into k folds. Each fold serves as test data while others train the model, providing robust performance estimates.",
+        "link": "https://en.wikipedia.org/wiki/Cross-validation_(statistics)"
+    },
+    
     # Models (key ones)
     "Linear Regression": {
         "description": "Fits a straight line to data. Simple, interpretable, and fast. Assumes linear relationship between features and target.",
@@ -1177,6 +1183,23 @@ if uploaded_file is not None:
             models_df = st.session_state.models_df
             top_5_models = st.session_state.top_5_models
 
+            # Cross-validation folds control
+            col1, col2 = st.columns([10, 1])
+            with col1:
+                num_cv_folds = st.number_input(
+                    "Number of Cross-Validation Folds for Tuning",
+                    min_value=3,
+                    max_value=10,
+                    value=5,
+                    step=1,
+                    help="Number of folds to use for cross-validation during hyperparameter tuning"
+                )
+            with col2:
+                tooltip("Cross-validation splits data into k folds for robust hyperparameter tuning. More folds = more robust but slower training.")
+
+            # Store CV folds in session state for future use and logging
+            st.session_state.num_cv_folds = num_cv_folds
+
             best_model = st.selectbox("Select a model for hyperparameter tuning:", 
                                       top_5_models, 
                                       key='model_selection')
@@ -1226,7 +1249,8 @@ if uploaded_file is not None:
                     "rmse": rmse,
                     "r2": r2
                 },
-                "split_percentage": split_percentage
+                "split_percentage": split_percentage,
+                "cv_folds": st.session_state.get('num_cv_folds', 5)  # Default to 5 if not set
             }
             st.session_state.model_logger.log_iteration(iteration_data)
             
