@@ -81,6 +81,16 @@ ML_METHODS_INFO = {
         "link": "https://en.wikipedia.org/wiki/Local_regression"
     },
     
+    # Outlier Handling
+    "IQR Method (on one or more columns)": {
+        "description": "Removes outliers using the Interquartile Range method. Values beyond Q1-1.5*IQR or Q3+1.5*IQR are considered outliers.",
+        "link": "https://en.wikipedia.org/wiki/Outlier"
+    },
+    "Threshold Method (on a single column)": {
+        "description": "Removes outliers based on custom threshold values. Allows filtering by greater than, less than, or outside a specified range.",
+        "link": "https://en.wikipedia.org/wiki/Outlier"
+    },
+    
     # Data Normalization
     "MinMaxScaler": {
         "description": "Scales data to a fixed range (usually 0-1). Preserves zero entries and sparse data structure.",
@@ -717,6 +727,137 @@ if uploaded_file is not None:
                     st.write("First 10 values in the date column:")
                     st.write(st.session_state.data[date_column].head(10).tolist())
                     st.write("Please ensure your date column contains valid date/time values.")
+
+    # Outlier Handling
+    col1, col2 = st.columns([10, 1])
+    with col1:
+        handle_outliers = st.checkbox("Handle Outliers")
+    with col2:
+        tooltip("Remove outliers that may negatively impact model performance")
+
+    if handle_outliers:
+        col1, col2 = st.columns([10, 1])
+        with col1:
+            outlier_method = st.radio(
+                "Choose outlier removal method",
+                ["IQR Method (on one or more columns)", "Threshold Method (on a single column)"]
+            )
+        with col2:
+            tooltip("IQR Method: Uses statistical quartiles to identify outliers. Threshold Method: Uses custom thresholds to remove values")
+
+        # Get numeric columns for outlier handling
+        numeric_columns = st.session_state.data.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if outlier_method == "IQR Method (on one or more columns)":
+            col1, col2 = st.columns([10, 1])
+            with col1:
+                iqr_columns = st.multiselect(
+                    "Select columns to check for outliers",
+                    numeric_columns,
+                    default=numeric_columns[:min(3, len(numeric_columns))]  # Default to first 3 numeric columns
+                )
+            with col2:
+                tooltip("Select which numeric columns to apply IQR outlier detection on")
+            
+            col1, col2 = st.columns([10, 1])
+            with col1:
+                iqr_multiplier = st.number_input(
+                    "IQR Multiplier",
+                    min_value=1.0,
+                    max_value=3.0,
+                    value=1.5,
+                    step=0.1,
+                    help="Higher values are more permissive (keep more data)"
+                )
+            with col2:
+                tooltip("Multiplier for IQR bounds. 1.5 is standard, higher values keep more data")
+                
+        elif outlier_method == "Threshold Method (on a single column)":
+            col1, col2 = st.columns([10, 1])
+            with col1:
+                threshold_column = st.selectbox(
+                    "Select column for threshold filtering",
+                    numeric_columns
+                )
+            with col2:
+                tooltip("Choose the numeric column to apply threshold filtering on")
+            
+            col1, col2 = st.columns([10, 1])
+            with col1:
+                condition = st.selectbox(
+                    "Condition",
+                    ["Remove values greater than", "Remove values less than", "Remove values outside range [min, max]"]
+                )
+            with col2:
+                tooltip("Choose how to filter the data based on threshold values")
+            
+            if condition in ["Remove values greater than", "Remove values less than"]:
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    threshold_value = st.number_input(
+                        f"Threshold value",
+                        value=float(st.session_state.data[threshold_column].median()) if threshold_column else 0.0
+                    )
+                with col2:
+                    tooltip("Values will be filtered based on this threshold")
+            elif condition == "Remove values outside range [min, max]":
+                col1, col2, col3, col4 = st.columns([5, 1, 5, 1])
+                with col1:
+                    min_threshold = st.number_input(
+                        "Minimum threshold",
+                        value=float(st.session_state.data[threshold_column].quantile(0.05)) if threshold_column else 0.0
+                    )
+                with col2:
+                    tooltip("Lower bound of acceptable range")
+                with col3:
+                    max_threshold = st.number_input(
+                        "Maximum threshold", 
+                        value=float(st.session_state.data[threshold_column].quantile(0.95)) if threshold_column else 1.0
+                    )
+                with col4:
+                    tooltip("Upper bound of acceptable range")
+
+        # Apply Outlier Removal button
+        if st.button("Apply Outlier Removal"):
+            original_rows = len(st.session_state.data)
+            
+            if outlier_method == "IQR Method (on one or more columns)":
+                if iqr_columns:
+                    st.session_state.data = functions.remove_outliers_iqr(
+                        st.session_state.data, 
+                        iqr_columns, 
+                        iqr_multiplier
+                    )
+                else:
+                    st.warning("Please select at least one column for IQR outlier removal.")
+            
+            elif outlier_method == "Threshold Method (on a single column)":
+                if threshold_column:
+                    if condition in ["Remove values greater than", "Remove values less than"]:
+                        st.session_state.data = functions.remove_outliers_by_threshold(
+                            st.session_state.data,
+                            threshold_column,
+                            condition.replace("Remove values ", ""),
+                            threshold_value=threshold_value
+                        )
+                    elif condition == "Remove values outside range [min, max]":
+                        st.session_state.data = functions.remove_outliers_by_threshold(
+                            st.session_state.data,
+                            threshold_column,
+                            "outside range",
+                            min_threshold=min_threshold,
+                            max_threshold=max_threshold
+                        )
+                else:
+                    st.warning("Please select a column for threshold outlier removal.")
+            
+            new_rows = len(st.session_state.data)
+            rows_removed = original_rows - new_rows
+            
+            if rows_removed > 0:
+                st.success(f"Outlier removal complete! Removed {rows_removed} rows ({rows_removed/original_rows*100:.1f}% of data). Dataset now has {new_rows} rows.")
+            else:
+                st.info("No outliers were detected and removed with the current settings.")
 
     # Data Smoothing
     col1, col2 = st.columns([10, 1])
