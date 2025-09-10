@@ -2081,6 +2081,69 @@ def smooth_data(data, method='moving_average', window_size=3, alpha=0.3):
     
     return result
 
+# Outlier Removal Functions
+@optimized_cache
+def remove_outliers_iqr(df, columns, multiplier=1.5):
+    """
+    Remove outliers using the Interquartile Range (IQR) method on specified columns.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame
+        columns (list): List of column names to check for outliers
+        multiplier (float): IQR multiplier for outlier threshold (default 1.5)
+        
+    Returns:
+        pd.DataFrame: DataFrame with outliers removed
+    """
+    df_clean = df.copy()
+    
+    for column in columns:
+        if column in df_clean.columns and df_clean[column].dtype in ['int64', 'float64']:
+            Q1 = df_clean[column].quantile(0.25)
+            Q3 = df_clean[column].quantile(0.75)
+            IQR = Q3 - Q1
+            
+            lower_bound = Q1 - multiplier * IQR
+            upper_bound = Q3 + multiplier * IQR
+            
+            # Keep only rows where the column value is within bounds
+            df_clean = df_clean[(df_clean[column] >= lower_bound) & (df_clean[column] <= upper_bound)]
+    
+    return df_clean
+
+@optimized_cache  
+def remove_outliers_by_threshold(df, column, condition, threshold_value=None, min_threshold=None, max_threshold=None):
+    """
+    Remove outliers based on threshold conditions for a single column.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame
+        column (str): Column name to apply threshold on
+        condition (str): Condition type - "greater than", "less than", or "outside range"
+        threshold_value (float): Single threshold value for greater/less than conditions
+        min_threshold (float): Minimum threshold for range condition
+        max_threshold (float): Maximum threshold for range condition
+        
+    Returns:
+        pd.DataFrame: DataFrame with outliers removed based on threshold
+    """
+    df_clean = df.copy()
+    
+    if column not in df_clean.columns:
+        return df_clean
+        
+    if condition == "greater than" and threshold_value is not None:
+        # Remove rows where column value is greater than threshold
+        df_clean = df_clean[df_clean[column] <= threshold_value]
+    elif condition == "less than" and threshold_value is not None:
+        # Remove rows where column value is less than threshold  
+        df_clean = df_clean[df_clean[column] >= threshold_value]
+    elif condition == "outside range" and min_threshold is not None and max_threshold is not None:
+        # Keep only rows where column value is within the range
+        df_clean = df_clean[(df_clean[column] >= min_threshold) & (df_clean[column] <= max_threshold)]
+    
+    return df_clean
+
 # Logging Functions
 class ModelLogger:
     def __init__(self, log_file='model_iterations.csv'):
