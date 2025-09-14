@@ -1096,47 +1096,84 @@ if uploaded_file is not None:
                         st.error("Please ensure your data contains appropriate spectral features.")
                 
                 if 'ndsi_results' in st.session_state:
+                    st.subheader("NDSI Parameters & Preview")
+                    
                     col1, col2 = st.columns([10, 1])
                     with col1:
-                        threshold = st.slider('Threshold', min_value=0.0, max_value=1.0, value=0.4)
+                        threshold = st.slider('Threshold', min_value=0.0, max_value=1.0, value=0.4, key="ndsi_threshold")
                     with col2:
                         tooltip("Minimum correlation threshold. Higher values will select only strongly correlated features")
                     
                     col1, col2 = st.columns([10, 1])
                     with col1:
-                        max_distance = st.slider('Max Distance', min_value=1, max_value=50, value=10)
+                        max_distance = st.slider('Max Distance', min_value=1, max_value=50, value=10, key="ndsi_max_distance")
                     with col2:
                         tooltip("Maximum band separation distance to consider")
                     
-                    if st.button("Apply NDSI Selection", key="apply_ndsi"):
-                        try:
-                            with st.spinner("Applying NDSI feature selection..."):
-                                top_bands_list = functions.display_ndsi_heatmap(st.session_state.ndsi_results, threshold, max_distance)
-                                final_ndsi_df = functions.calculate_ndsi(st.session_state.data, top_bands_list)
-                                
-                                # Safely concatenate with categorical and target columns
-                                concat_cols = []
-                                if categorical_columns:
-                                    for col in categorical_columns:
-                                        if col in st.session_state.data.columns:
-                                            concat_cols.append(st.session_state.data[col])
-                                
-                                if target_column in st.session_state.data.columns:
-                                    concat_cols.append(st.session_state.data[target_column])
-                                
-                                if concat_cols:
-                                    st.session_state.data = pd.concat([final_ndsi_df] + concat_cols, axis=1)
-                                else:
-                                    st.session_state.data = final_ndsi_df
+                    # Real-time preview of NDSI heatmap and selected bands
+                    st.subheader("📊 NDSI Heatmap Preview")
+                    try:
+                        with st.spinner("Updating preview..."):
+                            # Get the preview results without applying them to the data
+                            top_bands_list = functions.display_ndsi_heatmap(st.session_state.ndsi_results, threshold, max_distance)
                             
-                            st.success(f"NDSI selection applied! Number of columns: {len(st.session_state.data.columns)}")
-                            st.session_state.step4_done = True
-                            
-                            with st.expander("NDSI Results"):
-                                st.info(f"Number of columns after NDSI calculation: {len(st.session_state.data.columns)}")
-                                st.dataframe(st.session_state.data)
-                        except Exception as e:
-                            st.error(f"Error applying NDSI selection: {str(e)}")
+                            # Show information about what will be selected
+                            if top_bands_list:
+                                st.success(f"🎯 Preview: {len(top_bands_list)} band combinations will be selected")
+                                
+                                with st.expander("📋 Selected Band Combinations Preview"):
+                                    for i, bands in enumerate(top_bands_list[:10]):  # Show first 10
+                                        st.write(f"**Combination {i+1}:** {bands}")
+                                    if len(top_bands_list) > 10:
+                                        st.write(f"... and {len(top_bands_list) - 10} more combinations")
+                            else:
+                                st.warning("⚠️ No band combinations meet the current criteria. Try lowering the threshold or increasing max distance.")
+                        
+                        # Store the preview results for the apply button
+                        st.session_state.ndsi_preview_bands = top_bands_list
+                        
+                    except Exception as e:
+                        st.error(f"Error generating preview: {str(e)}")
+                        st.session_state.ndsi_preview_bands = []
+                    
+                    # Apply button with preview information
+                    if st.session_state.get('ndsi_preview_bands', []):
+                        if st.button(f"✅ Apply NDSI Selection ({len(st.session_state.ndsi_preview_bands)} combinations)", key="apply_ndsi"):
+                            try:
+                                with st.spinner("Applying NDSI feature selection..."):
+                                    # Use the previewed bands
+                                    final_ndsi_df = functions.calculate_ndsi(st.session_state.data, st.session_state.ndsi_preview_bands)
+                                    
+                                    # Safely concatenate with categorical and target columns
+                                    concat_cols = []
+                                    if categorical_columns:
+                                        for col in categorical_columns:
+                                            if col in st.session_state.data.columns:
+                                                concat_cols.append(st.session_state.data[col])
+                                    
+                                    if target_column in st.session_state.data.columns:
+                                        concat_cols.append(st.session_state.data[target_column])
+                                    
+                                    if concat_cols:
+                                        st.session_state.data = pd.concat([final_ndsi_df] + concat_cols, axis=1)
+                                    else:
+                                        st.session_state.data = final_ndsi_df
+                                
+                                st.success(f"✅ NDSI selection applied successfully! Dataset now has {len(st.session_state.data.columns)} columns.")
+                                st.session_state.step4_done = True
+                                
+                                with st.expander("📊 NDSI Results"):
+                                    st.info(f"Number of columns after NDSI calculation: {len(st.session_state.data.columns)}")
+                                    st.dataframe(st.session_state.data)
+                                    
+                                # Clear the preview data
+                                if 'ndsi_preview_bands' in st.session_state:
+                                    del st.session_state.ndsi_preview_bands
+                                    
+                            except Exception as e:
+                                st.error(f"Error applying NDSI selection: {str(e)}")
+                    else:
+                        st.button("⚠️ Apply NDSI Selection (No valid combinations)", key="apply_ndsi_disabled", disabled=True)
             
             elif selection_method in ["SelectKBest", "RFE"]:
                 col1, col2 = st.columns([10, 1])
