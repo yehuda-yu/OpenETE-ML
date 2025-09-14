@@ -1158,12 +1158,30 @@ if uploaded_file is not None:
                                         st.session_state.data = pd.concat([final_ndsi_df] + concat_cols, axis=1)
                                     else:
                                         st.session_state.data = final_ndsi_df
+                                    
+                                    # IMPORTANT: Update feature and target selections to match new data structure
+                                    # Update features to be the new NDSI columns (excluding target and categorical)
+                                    new_feature_cols = [col for col in st.session_state.data.columns 
+                                                       if col != target_column and col not in categorical_columns]
+                                    st.session_state.features = new_feature_cols
+                                    
+                                    # Keep the same target column
+                                    st.session_state.target_column = target_column
+                                    
+                                    # Keep the same categorical columns (if they still exist)
+                                    st.session_state.categorical_columns = [col for col in categorical_columns 
+                                                                          if col in st.session_state.data.columns]
                                 
                                 st.success(f"✅ NDSI selection applied successfully! Dataset now has {len(st.session_state.data.columns)} columns.")
+                                st.success(f"🎯 Features updated: {len(new_feature_cols)} NDSI features selected. You can now proceed directly to model training!")
                                 st.session_state.step4_done = True
                                 
                                 with st.expander("📊 NDSI Results"):
                                     st.info(f"Number of columns after NDSI calculation: {len(st.session_state.data.columns)}")
+                                    st.info(f"New features: {', '.join(new_feature_cols[:5])}{'...' if len(new_feature_cols) > 5 else ''}")
+                                    st.info(f"Target column: {target_column}")
+                                    if st.session_state.categorical_columns:
+                                        st.info(f"Categorical columns: {', '.join(st.session_state.categorical_columns)}")
                                     st.dataframe(st.session_state.data)
                                     
                                 # Clear the preview data
