@@ -380,11 +380,21 @@ if uploaded_file is not None:
     col1, col2 = st.columns([10, 1])
     with col1:
         # If features are already selected and stored in session state, use them as default
-        default_features = st.session_state.get('features', st.session_state.data.columns.tolist())
+        # But ensure they exist in current data columns to avoid the error
+        stored_features = st.session_state.get('features', [])
+        current_columns = st.session_state.data.columns.tolist()
+        
+        # Filter stored features to only include those that exist in current data
+        valid_default_features = [f for f in stored_features if f in current_columns]
+        
+        # If no valid stored features, use all columns as default
+        if not valid_default_features:
+            valid_default_features = current_columns
+        
         features = st.multiselect(
             "Select features columns", 
-            st.session_state.data.columns.tolist(), 
-            default=default_features
+            current_columns, 
+            default=valid_default_features
         )
     with col2:
         tooltip("Select the columns from your dataset that will be used as features (independent variables) for the model")
@@ -404,8 +414,10 @@ if uploaded_file is not None:
         col1, col2 = st.columns([10, 1])
         with col1:
             # If categorical columns are already selected, use them as default
-            default_categorical = st.session_state.get('categorical_columns', [])
-            categorical_columns = st.multiselect("Select categorical columns", features, default=default_categorical)
+            # But ensure they exist in current features list to avoid the error
+            stored_categorical = st.session_state.get('categorical_columns', [])
+            valid_categorical = [c for c in stored_categorical if c in features]
+            categorical_columns = st.multiselect("Select categorical columns", features, default=valid_categorical)
         with col2:
             tooltip("Select the columns that contain categorical data (text, labels, etc.)")
     else:
@@ -421,6 +433,9 @@ if uploaded_file is not None:
         default_target_index = 0
         if 'target_column' in st.session_state and st.session_state.target_column in target_options:
             default_target_index = target_options.index(st.session_state.target_column)
+        elif len(target_options) == 0:
+            st.error("No columns available for target selection. Please ensure you have selected features that leave at least one column for the target.")
+            st.stop()
         
         target_column = st.selectbox("Select the target column", target_options, index=default_target_index)
     with col2:
@@ -950,12 +965,26 @@ if uploaded_file is not None:
     st.header("Step 5: Feature Selection/Extraction Options")
     col1, col2 = st.columns([10, 1])
     with col1:
-        reduce_features = st.checkbox("Reduce the number of features")
+        reduce_features = st.checkbox("Enable feature reduction/selection", 
+                                     help="Check this to configure feature reduction methods")
     with col2:
         tooltip("Enable this option to decrease the number of features in your dataset using dimensionality reduction techniques")
+    
+    # Add skip button for users who don't want feature selection
+    if not reduce_features:
+        if st.button("Skip Feature Selection and Continue", key="skip_feature_selection"):
+            st.session_state.step4_done = True
+            st.success("Feature selection skipped. Proceeding with all available features.")
+    
+    # Add reset button in case something goes wrong
+    if st.button("Reset Feature Selection", key="reset_feature_selection", help="Click this if you encounter errors and want to reset"):
+        # Clear any stored NDSI results or other temporary data
+        if 'ndsi_results' in st.session_state:
+            del st.session_state.ndsi_results
+        st.session_state.step4_done = False
+        st.warning("Feature selection reset. You can now try again.")
 
     if reduce_features:
-        st.session_state.step4_done = True
         col1, col2 = st.columns([10, 1])
         with col1:
             reduction_method = st.radio("Choose reduction method", ["Feature Extraction", "Feature Selection"])
@@ -968,83 +997,189 @@ if uploaded_file is not None:
                 extraction_method = st.selectbox("Choose extraction method", ["PCA", "Time Series", "t-SNE"])
             with col2:
                 tooltip("PCA: Principal Component Analysis reduces dimensions while preserving variance. Time Series: Extracts features from temporal data. t-SNE: Non-linear technique for complex data")
+            
             show_method_info(extraction_method, show_educational_info)
+            
             if extraction_method == "PCA":
                 col1, col2 = st.columns([10, 1])
                 with col1:
                     variance_percentage = st.slider("Select the variance percentage to keep", 70.0, 100.0, 98.0, step=1.0)
                 with col2:
                     tooltip("Higher values keep more information but fewer dimensions are reduced. A value of 95% means keeping 95% of the original information")
-                reduced_data, total_cols_before, total_cols_after, cum_var = functions.perform_pca(st.session_state.data, target_column, categorical_columns, variance_percentage)
-                with st.expander("PCA Results"):
-                    st.dataframe(reduced_data.head(), width=700, height=200)
-                    functions.plot_cumulative_variance(cum_var, variance_percentage)
-                    st.markdown(f"""
-                    **Number of Features:**
-                    - **Before PCA:** {total_cols_before}
-                    - **After PCA:** {total_cols_after}
-                    """)
-                st.session_state.data = reduced_data
+                
+                if st.button("Apply PCA", key="apply_pca"):
+                    try:
+                        with st.spinner("Applying PCA..."):
+                            reduced_data, total_cols_before, total_cols_after, cum_var = functions.perform_pca(
+                                st.session_state.data, target_column, categorical_columns, variance_percentage
+                            )
+                        
+                        st.success(f"PCA applied successfully! Reduced from {total_cols_before} to {total_cols_after} features.")
+                        st.session_state.data = reduced_data
+                        st.session_state.step4_done = True
+                        
+                        with st.expander("PCA Results"):
+                            st.dataframe(reduced_data.head(), width=700, height=200)
+                            functions.plot_cumulative_variance(cum_var, variance_percentage)
+                            st.markdown(f"""
+                            **Number of Features:**
+                            - **Before PCA:** {total_cols_before}
+                            - **After PCA:** {total_cols_after}
+                            """)
+                    except Exception as e:
+                        st.error(f"Error applying PCA: {str(e)}")
+                        st.error("Please ensure your data is properly preprocessed and contains numeric features.")
+            
             elif extraction_method == "Time Series":
-                st.session_state.data = functions.time_series_feature_extraction(st.session_state.data, target_column, categorical_columns)
-                with st.expander("Time Series-Based Feature Extraction Results"):
-                    st.dataframe(st.session_state.data, width=700, height=200)
+                if st.button("Apply Time Series Feature Extraction", key="apply_timeseries"):
+                    try:
+                        with st.spinner("Applying Time Series Feature Extraction..."):
+                            st.session_state.data = functions.time_series_feature_extraction(
+                                st.session_state.data, target_column, categorical_columns
+                            )
+                        
+                        st.success("Time Series Feature Extraction applied successfully!")
+                        st.session_state.step4_done = True
+                        
+                        with st.expander("Time Series-Based Feature Extraction Results"):
+                            st.dataframe(st.session_state.data, width=700, height=200)
+                    except Exception as e:
+                        st.error(f"Error applying Time Series Feature Extraction: {str(e)}")
+                        st.error("Please ensure your data contains appropriate time series features.")
+            
             elif extraction_method == "t-SNE":
                 col1, col2 = st.columns([10, 1])
                 with col1:
                     n_components = st.slider("Select the number of t-SNE components", 2, 10, 2, step=1)
                 with col2:
                     tooltip("Number of dimensions to reduce your data to. Usually 2 or 3 for visualization purposes")
-                st.session_state.data = functions.perform_tsne(st.session_state.data, target_column, categorical_columns, n_components=n_components)
-                with st.expander("t-SNE Results"):
-                    st.dataframe(st.session_state.data.head(), width=700, height=200)
+                
+                if st.button("Apply t-SNE", key="apply_tsne"):
+                    try:
+                        with st.spinner("Applying t-SNE (this may take a while)..."):
+                            st.session_state.data = functions.perform_tsne(
+                                st.session_state.data, target_column, categorical_columns, n_components=n_components
+                            )
+                        
+                        st.success(f"t-SNE applied successfully! Reduced to {n_components} components.")
+                        st.session_state.step4_done = True
+                        
+                        with st.expander("t-SNE Results"):
+                            st.dataframe(st.session_state.data.head(), width=700, height=200)
+                    except Exception as e:
+                        st.error(f"Error applying t-SNE: {str(e)}")
+                        st.error("Please ensure your data is properly preprocessed and contains numeric features.")
+        
         elif reduction_method == "Feature Selection":
             col1, col2 = st.columns([10, 1])
             with col1:
                 selection_method = st.selectbox("Choose selection method", ["NDSI", "SelectKBest", 'RFE'])
             with col2:
                 tooltip("NDSI: Normalized Difference Spectral Index. SelectKBest: Selects top k features based on statistical tests. RFE: Recursive Feature Elimination")
+            
             show_method_info(selection_method, show_educational_info)
+            
             if selection_method == "NDSI":
-                df_results = functions.NDSI_pearson(st.session_state.data, categorical_columns, target_column)
-                df_results['p_value'] =     df_results['p_value'].apply(lambda p: f"{p:.2e}" if p < 1e-3 else round(p, 3))
-                st.subheader("NDSI Pearson Results")
-                st.dataframe(df_results)
-                col1, col2 = st.columns([10, 1])
-                with col1:
-                    threshold = st.slider('Threshold', min_value=0.0, max_value=1.0, value=0.4)
-                with col2:
-                    tooltip("Minimum correlation threshold. Higher values will select only strongly correlated features")
-                col1, col2 = st.columns([10, 1])
-                with col1:
-                    max_distance = st.slider('Max Distance', min_value=1, max_value=50, value=10)
-                with col2:
-                    tooltip("Maximum band separation distance to consider")
-                top_bands_list = functions.display_ndsi_heatmap(df_results, threshold, max_distance)
-                with st.expander("NDSI Results"):
-                    final_ndsi_df = functions.calculate_ndsi(st.session_state.data, top_bands_list)
-                    st.info(f"Number of columns after NDSI calculation: {len(final_ndsi_df.columns)}")
-                    st.session_state.data = pd.concat([final_ndsi_df, st.session_state.data[categorical_columns], st.session_state.data[target_column]], axis=1)
-                    
-                    # --- התיקון ---
-                    # עדכון רשימת הפיצ'רים ב-session_state כדי שתתאים לעמודות החדשות
-                    new_features = [col for col in st.session_state.data.columns if col != st.session_state.target_column]
-                    st.session_state.features = new_features
-                    # --- סוף התיקון ---
+                if st.button("Analyze NDSI", key="analyze_ndsi"):
+                    try:
+                        with st.spinner("Analyzing NDSI correlations..."):
+                            df_results = functions.NDSI_pearson(st.session_state.data, categorical_columns, target_column)
+                            df_results['p_value'] = df_results['p_value'].apply(lambda p: f"{p:.2e}" if p < 1e-3 else round(p, 3))
+                        
+                        st.session_state.ndsi_results = df_results
+                        st.success("NDSI analysis completed!")
+                        
+                        st.subheader("NDSI Pearson Results")
+                        st.dataframe(df_results)
+                    except Exception as e:
+                        st.error(f"Error analyzing NDSI: {str(e)}")
+                        st.error("Please ensure your data contains appropriate spectral features.")
                 
-                    st.dataframe(st.session_state.data)
+                if 'ndsi_results' in st.session_state:
+                    col1, col2 = st.columns([10, 1])
+                    with col1:
+                        threshold = st.slider('Threshold', min_value=0.0, max_value=1.0, value=0.4)
+                    with col2:
+                        tooltip("Minimum correlation threshold. Higher values will select only strongly correlated features")
+                    
+                    col1, col2 = st.columns([10, 1])
+                    with col1:
+                        max_distance = st.slider('Max Distance', min_value=1, max_value=50, value=10)
+                    with col2:
+                        tooltip("Maximum band separation distance to consider")
+                    
+                    if st.button("Apply NDSI Selection", key="apply_ndsi"):
+                        try:
+                            with st.spinner("Applying NDSI feature selection..."):
+                                top_bands_list = functions.display_ndsi_heatmap(st.session_state.ndsi_results, threshold, max_distance)
+                                final_ndsi_df = functions.calculate_ndsi(st.session_state.data, top_bands_list)
+                                
+                                # Safely concatenate with categorical and target columns
+                                concat_cols = []
+                                if categorical_columns:
+                                    for col in categorical_columns:
+                                        if col in st.session_state.data.columns:
+                                            concat_cols.append(st.session_state.data[col])
+                                
+                                if target_column in st.session_state.data.columns:
+                                    concat_cols.append(st.session_state.data[target_column])
+                                
+                                if concat_cols:
+                                    st.session_state.data = pd.concat([final_ndsi_df] + concat_cols, axis=1)
+                                else:
+                                    st.session_state.data = final_ndsi_df
+                            
+                            st.success(f"NDSI selection applied! Number of columns: {len(st.session_state.data.columns)}")
+                            st.session_state.step4_done = True
+                            
+                            with st.expander("NDSI Results"):
+                                st.info(f"Number of columns after NDSI calculation: {len(st.session_state.data.columns)}")
+                                st.dataframe(st.session_state.data)
+                        except Exception as e:
+                            st.error(f"Error applying NDSI selection: {str(e)}")
+            
             elif selection_method in ["SelectKBest", "RFE"]:
                 col1, col2 = st.columns([10, 1])
                 with col1:
-                    num_features = st.slider("Select the number of top features", 1, len(features), len(features), step=1)
+                    # Use current feature count, with fallback
+                    try:
+                        current_features = [col for col in st.session_state.data.columns if col != target_column and col not in categorical_columns]
+                        max_features = len(current_features) if current_features else 1
+                        default_features = min(max_features, len(features) if 'features' in locals() else max_features)
+                    except:
+                        max_features = 1
+                        default_features = 1
+                    
+                    num_features = st.slider("Select the number of top features", 1, max_features, default_features, step=1)
                 with col2:
                     tooltip("Number of most important features to keep")
-                st.session_state.data = functions.perform_select_kbest(st.session_state.data, target_column, categorical_columns, k=num_features) if selection_method == "SelectKBest" else functions.perform_rfe(st.session_state.data, target_column, categorical_columns, num_features)
-                with st.expander(f"{selection_method} Results"):
-                    st.dataframe(st.session_state.data, width=700, height=200)
+                
+                button_text = f"Apply {selection_method}"
+                if st.button(button_text, key=f"apply_{selection_method.lower()}"):
+                    try:
+                        with st.spinner(f"Applying {selection_method}..."):
+                            if selection_method == "SelectKBest":
+                                st.session_state.data = functions.perform_select_kbest(
+                                    st.session_state.data, target_column, categorical_columns, k=num_features
+                                )
+                            else:  # RFE
+                                st.session_state.data = functions.perform_rfe(
+                                    st.session_state.data, target_column, categorical_columns, num_features
+                                )
+                        
+                        st.success(f"{selection_method} applied successfully! Selected {num_features} features.")
+                        st.session_state.step4_done = True
+                        
+                        with st.expander(f"{selection_method} Results"):
+                            st.dataframe(st.session_state.data, width=700, height=200)
+                    except Exception as e:
+                        st.error(f"Error applying {selection_method}: {str(e)}")
+                        st.error("Please ensure your data contains sufficient numeric features for selection.")
+    
     # --- Show data after feature selection/extraction ---
-    with st.expander("View Data After Feature Selection/Extraction"):
-        st.dataframe(st.session_state.data)
+    if st.session_state.get('step4_done', False):
+        with st.expander("View Data After Feature Selection/Extraction"):
+            st.dataframe(st.session_state.data)
 
     # Train-test split
     st.header("Step 6: Model Training")
