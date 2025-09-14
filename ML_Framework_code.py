@@ -1025,6 +1025,13 @@ if uploaded_file is not None:
                     final_ndsi_df = functions.calculate_ndsi(st.session_state.data, top_bands_list)
                     st.info(f"Number of columns after NDSI calculation: {len(final_ndsi_df.columns)}")
                     st.session_state.data = pd.concat([final_ndsi_df, st.session_state.data[categorical_columns], st.session_state.data[target_column]], axis=1)
+                    
+                    # --- התיקון ---
+                    # עדכון רשימת הפיצ'רים ב-session_state כדי שתתאים לעמודות החדשות
+                    new_features = [col for col in st.session_state.data.columns if col != st.session_state.target_column]
+                    st.session_state.features = new_features
+                    # --- סוף התיקון ---
+                
                     st.dataframe(st.session_state.data)
             elif selection_method in ["SelectKBest", "RFE"]:
                 col1, col2 = st.columns([10, 1])
