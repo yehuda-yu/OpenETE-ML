@@ -399,21 +399,38 @@ def display_ndsi_heatmap(results, threshold, max_distance):
         colorbar=dict(title='Pearson Correlation')  # Add colorbar title
     ))
     
-    # Add local maxima and minima
+    # Add local maxima and minima (without legend)
     maxima_x, maxima_y = np.where(local_max)
-    fig.add_trace(go.Scatter(x=data.columns[maxima_y], y=data.index[maxima_x], mode='markers', marker=dict(color='blue'), name='Local Maxima'))
+    fig.add_trace(go.Scatter(
+        x=data.columns[maxima_y], 
+        y=data.index[maxima_x], 
+        mode='markers', 
+        marker=dict(color='blue', size=8), 
+        name='Local Maxima',
+        showlegend=False,  # Hide from legend
+        hovertemplate='<b>Local Maximum</b><br>Band 1: %{y}<br>Band 2: %{x}<br><extra></extra>'
+    ))
 
     minima_x, minima_y = np.where(local_min)
-    fig.add_trace(go.Scatter(x=data.columns[minima_y], y=data.index[minima_x], mode='markers', marker=dict(color='red'), name='Local Minima'))
+    fig.add_trace(go.Scatter(
+        x=data.columns[minima_y], 
+        y=data.index[minima_x], 
+        mode='markers', 
+        marker=dict(color='red', size=8), 
+        name='Local Minima',
+        showlegend=False,  # Hide from legend
+        hovertemplate='<b>Local Minimum</b><br>Band 1: %{y}<br>Band 2: %{x}<br><extra></extra>'
+    ))
 
-    # Update layout
+    # Update layout (hide legend entirely)
     fig.update_layout(
-        title='NDSI',
+        title='NDSI Heatmap - Hover for Values',
         xaxis_title='Band 2',
         yaxis_title='Band 1',
         height=600,  # Adjust height as needed
         width=800,  # Adjust width as needed
-        template='plotly'  # Choose plotly theme
+        template='plotly',  # Choose plotly theme
+        showlegend=False  # Hide legend completely
     )
 
     # Display the Plotly figure using st.plotly_chart()
