@@ -296,13 +296,6 @@ st.sidebar.markdown("""
 - Your progress is automatically saved
 """)
 
-# Memory management option
-st.sidebar.markdown("---")
-if st.sidebar.button("🗑️ Clear Cache & Free Memory", help="Clear cached data and free up memory"):
-    st.cache_data.clear()
-    functions.cleanup_memory()
-    st.sidebar.success("✅ Cache cleared!")
-
 # Create a title for the app
 st.title("OpenETE-ML End to End ML Regression Model Builder")
 
@@ -323,21 +316,9 @@ if uploaded_file is not None:
     
     if is_new_file:
         # If it's a new file, reset the entire session state and load the new data.
-        # Clean up memory before loading new data
-        functions.cleanup_memory()
-        
-        # Clear session state but preserve logger if it exists
-        preserved_keys = {}
-        if 'model_logger' in st.session_state:
-            preserved_keys['model_logger'] = st.session_state.model_logger
-        
         for key in list(st.session_state.keys()):
             if not key.startswith('_'):  # Avoid touching Streamlit's internal keys
                 del st.session_state[key]
-        
-        # Restore preserved keys
-        for key, value in preserved_keys.items():
-            st.session_state[key] = value
         
         try:
             # Load data and set initial state
@@ -1263,429 +1244,375 @@ if uploaded_file is not None:
     with col2:
         tooltip("Percentage of data to use for training. The rest will be used for testing")
 
-    # Dataset size warning before model training
-    if 'data' in st.session_state:
-        n_rows, n_cols = st.session_state.data.shape
-        if n_rows > 10000 or n_cols > 100:
-            st.warning(f"⚠️ Large dataset detected: {n_rows} rows × {n_cols} columns. Model training may take several minutes.")
-        
-        # Show estimated time
-        if n_rows > 5000:
-            st.info("⏱️ Estimated training time: 5-15 minutes depending on your system.")
-
     # Run Model button
     if st.button("Run Model") or st.session_state.get('models_evaluated', False):
         # If user skipped feature engineering, mark step4_done as True so progress advances
         if not st.session_state.get('step4_done', False):
             st.session_state.step4_done = True
         st.session_state.step5_done = True
-        
-        # Use status container for better UX
-        with st.status("🚀 Training models...", expanded=True) as status:
-            try:
-                # Separate target column to prevent it from being dropped
-                target = st.session_state.data[target_column]
-                data = st.session_state.data.drop(columns=[target_column])
+        try:
+            # Separate target column to prevent it from being dropped
+            target = st.session_state.data[target_column]
+            data = st.session_state.data.drop(columns=[target_column])
 
-                # Data processing
-                if 'missing_values_option' in locals():
-                    method_map = {
-                        "Mean Imputation": "mean",
-                        "Median Imputation": "median",
-                        "Mode Imputation": "mode",
-                        "KNN Imputation": "knn",
-                        "Drop Rows": "drop_rows",
-                        "Drop Columns": "drop_cols"
-                    }
-                    method = method_map[missing_values_option]
-                    k = k_neighbors if method == "knn" else 5
-                    data = functions.impute_missing_values(data, method=method, k=k)
-
-                # Data Smoothing
-                if 'smoothing_method' in locals():
-                    method_map = {
-                        "Moving Average": "moving_average",
-                        "Exponential Smoothing": "exponential",
-                        "Savitzky-Golay": "savgol",
-                        "LOWESS": "lowess"
-                    }
-                    method = method_map[smoothing_method]
-                    params = {}
-                    if method in ["moving_average", "savgol"]:
-                        params["window_size"] = window_size
-                    elif method == "exponential":
-                        params["alpha"] = alpha
-                    elif method == "lowess":
-                        params["window_size"] = int(frac * len(data))
-                    data = functions.smooth_data(data, method=method, **params)
-
-                # Log preprocessing choices
-                preprocessing_choices = {
-                    "missing_values_method": missing_values_option if 'missing_values_option' in locals() else None,
-                    "smoothing_method": smoothing_method if 'smoothing_method' in locals() else None,
-                    "normalization_method": normalization_method if normalize_data else None,
-                    "categorical_encoding": categorical_encoding_method if encode_categorical_variables and has_categorical_columns else None
+            # Data processing
+            if 'missing_values_option' in locals():
+                method_map = {
+                    "Mean Imputation": "mean",
+                    "Median Imputation": "median",
+                    "Mode Imputation": "mode",
+                    "KNN Imputation": "knn",
+                    "Drop Rows": "drop_rows",
+                    "Drop Columns": "drop_cols"
                 }
+                method = method_map[missing_values_option]
+                k = k_neighbors if method == "knn" else 5
+                data = functions.impute_missing_values(data, method=method, k=k)
 
-                # Encoding
-                if has_categorical_columns:
-                    numerical_columns = list(set(data.columns) - set(categorical_columns))
-                    numerical_columns = list(set(numerical_columns).intersection(data.select_dtypes(include=['number']).columns))
-                    
-                    if encode_categorical_variables and categorical_encoding_method and categorical_columns:
-                        if categorical_encoding_method == "OneHotEncoder":
-                            encoded_data = pd.get_dummies(data[categorical_columns], columns=categorical_columns, dtype=float)
-                            data = pd.concat([data.drop(categorical_columns, axis=1), encoded_data], axis=1)
-                        elif categorical_encoding_method == "LabelEncoder":
-                            label_encoder = LabelEncoder()
-                            for col in categorical_columns:
-                                data[col] = label_encoder.fit_transform(data[col])
+            # Data Smoothing
+            if 'smoothing_method' in locals():
+                method_map = {
+                    "Moving Average": "moving_average",
+                    "Exponential Smoothing": "exponential",
+                    "Savitzky-Golay": "savgol",
+                    "LOWESS": "lowess"
+                }
+                method = method_map[smoothing_method]
+                params = {}
+                if method in ["moving_average", "savgol"]:
+                    params["window_size"] = window_size
+                elif method == "exponential":
+                    params["alpha"] = alpha
+                elif method == "lowess":
+                    params["window_size"] = int(frac * len(data))
+                data = functions.smooth_data(data, method=method, **params)
 
-                # Normalization
-                if normalize_data:
-                    numerical_columns = data.columns
-                    scaler = MinMaxScaler() if normalization_method == "MinMaxScaler" else StandardScaler()
-                    data[numerical_columns] = scaler.fit_transform(data[numerical_columns])
+            # Log preprocessing choices
+            preprocessing_choices = {
+                "missing_values_method": missing_values_option if 'missing_values_option' in locals() else None,
+                "smoothing_method": smoothing_method if 'smoothing_method' in locals() else None,
+                "normalization_method": normalization_method if normalize_data else None,
+                "categorical_encoding": categorical_encoding_method if encode_categorical_variables and has_categorical_columns else None
+            }
 
-                # Add the target column back to the processed data before displaying it
-                if 'target_column' in st.session_state:
-                    data[st.session_state.target_column] = target
+            # Encoding
+            if has_categorical_columns:
+                numerical_columns = list(set(data.columns) - set(categorical_columns))
+                numerical_columns = list(set(numerical_columns).intersection(data.select_dtypes(include=['number']).columns))
                 
-                st.subheader("Processed Data:")
-                st.write(data)
+                if encode_categorical_variables and categorical_encoding_method and categorical_columns:
+                    if categorical_encoding_method == "OneHotEncoder":
+                        encoded_data = pd.get_dummies(data[categorical_columns], columns=categorical_columns, dtype=float)
+                        data = pd.concat([data.drop(categorical_columns, axis=1), encoded_data], axis=1)
+                    elif categorical_encoding_method == "LabelEncoder":
+                        label_encoder = LabelEncoder()
+                        for col in categorical_columns:
+                            data[col] = label_encoder.fit_transform(data[col])
 
-                # Prepare data for modeling
-                if 'X_train' not in st.session_state.state:
-                    # The target is already in the 'data' DataFrame, so we just need to sample and split
-                    data = data.sample(frac=1, random_state=42)
-                    X = data.drop(st.session_state.target_column, axis=1)
-                    y = data[st.session_state.target_column]
-                    X.columns = X.columns.astype(str)
-                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1-split_percentage, random_state=42)
-                    st.session_state.state['X_train'], st.session_state.state['X_test'], st.session_state.state['y_train'], st.session_state.state['y_test'] = X_train, X_test, y_train, y_test
+            # Normalization
+            if normalize_data:
+                numerical_columns = data.columns
+                scaler = MinMaxScaler() if normalization_method == "MinMaxScaler" else StandardScaler()
+                data[numerical_columns] = scaler.fit_transform(data[numerical_columns])
 
-                X_train, X_test, y_train, y_test = st.session_state.state['X_train'], st.session_state.state['X_test'], st.session_state.state['y_train'], st.session_state.state['y_test']
+            # Add the target column back to the processed data before displaying it
+            if 'target_column' in st.session_state:
+                data[st.session_state.target_column] = target
+            
+            st.subheader("Processed Data:")
+            st.write(data)
 
-                if not st.session_state.models_evaluated:
-                    st.write("📊 **Step 1/4:** Evaluating multiple regression models...")
-                    st.info("🔄 Testing various algorithms to find the best performers. This may take a few minutes.")
-                    
-                    # Create progress bar
-                    progress_bar = st.progress(0)
-                    progress_bar.progress(10)
-                    
-                    try:
-                        models_df = functions.evaluate_regression_models(X_train, X_test, y_train, y_test)
-                        progress_bar.progress(100)
+            # Prepare data for modeling
+            if 'X_train' not in st.session_state.state:
+                # The target is already in the 'data' DataFrame, so we just need to sample and split
+                data = data.sample(frac=1, random_state=42)
+                X = data.drop(st.session_state.target_column, axis=1)
+                y = data[st.session_state.target_column]
+                X.columns = X.columns.astype(str)
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1-split_percentage, random_state=42)
+                st.session_state.state['X_train'], st.session_state.state['X_test'], st.session_state.state['y_train'], st.session_state.state['y_test'] = X_train, X_test, y_train, y_test
+
+            X_train, X_test, y_train, y_test = st.session_state.state['X_train'], st.session_state.state['X_test'], st.session_state.state['y_train'], st.session_state.state['y_test']
+
+            if not st.session_state.models_evaluated:
+                st.subheader("Regression Models Performance on Training Set")
+                with st.spinner("Running multiple regression models on your data. This may take up to a few minutes depending on dataset size and model complexity..."):
+                    models_df = functions.evaluate_regression_models(X_train, X_test, y_train, y_test)
+                models_df = models_df.sort_values(by='R-Squared', ascending=False)
+                st.dataframe(models_df[['R-Squared','RMSE','Time Taken']])
+                
+                # Show educational info about all models if enabled
+                if show_educational_info:
+                    with st.expander("📚 Learn about Machine Learning Models", expanded=False):
+                        st.markdown("""
+                        ### Popular Regression Models Explained:
                         
-                        if models_df.empty:
-                            st.error("❌ Model evaluation failed. Please check your data and try again.")
-                            st.stop()
+                        **Tree-Based Models:**
+                        - **Random Forest**: Ensemble of decision trees that vote on predictions. Reduces overfitting and provides feature importance.
+                        - **XGBoost**: Optimized gradient boosting that often achieves the best performance on structured data.
+                        - **LightGBM**: Fast gradient boosting framework good for large datasets.
+                        - **Gradient Boosting**: Sequentially builds trees to correct previous errors.
                         
-                        models_df = models_df.sort_values(by='R-Squared', ascending=False)
+                        **Linear Models:**
+                        - **Linear Regression**: Simple straight-line fit, very interpretable.
+                        - **Ridge/Lasso**: Regularized linear models that prevent overfitting.
+                        - **Elastic Net**: Combines benefits of both Ridge and Lasso.
                         
-                        st.success(f"✅ Successfully evaluated {len(models_df)} models!")
-                        st.subheader("Regression Models Performance on Training Set")
-                        st.dataframe(models_df[['R-Squared','RMSE','Time Taken']])
+                        **Support Vector Models:**
+                        - **SVR**: Uses support vectors to find optimal prediction boundaries.
+                        - **NuSVR**: SVR variant with more interpretable parameters.
                         
-                    except Exception as e:
-                        st.error(f"❌ Error during model evaluation: {str(e)}")
-                        st.info("💡 Try reducing your dataset size or selecting fewer features.")
-                        st.stop()
+                        **Neural Networks:**
+                        - **MLPRegressor**: Multi-layer neural network for complex patterns.
+                        
+                        **Other Models:**
+                        - **K-Nearest Neighbors**: Predicts based on similar training examples.
+                        - **AdaBoost**: Ensemble method that focuses on difficult samples.
+                        - **Bagging**: Reduces variance by averaging multiple models.
+                        
+                        [Learn more about Machine Learning Models](https://en.wikipedia.org/wiki/Machine_learning)
+                        """)
+                
+                st.session_state.models_df = models_df
+                st.session_state.top_5_models = models_df.head(15).index.tolist()
+                st.session_state.models_evaluated = True
+
+            models_df = st.session_state.models_df
+            top_5_models = st.session_state.top_5_models
+
+            # Cross-validation folds control
+            col1, col2 = st.columns([10, 1])
+            with col1:
+                num_cv_folds = st.number_input(
+                    "Number of Cross-Validation Folds for Tuning",
+                    min_value=3,
+                    max_value=10,
+                    value=5,
+                    step=1,
+                    help="Number of folds to use for cross-validation during hyperparameter tuning"
+                )
+            with col2:
+                tooltip("Cross-validation splits data into k folds for robust hyperparameter tuning. More folds = more robust but slower training.")
+
+            # Store CV folds in session state for future use and logging
+            st.session_state.num_cv_folds = num_cv_folds
+
+            best_model = st.selectbox("Select a model for hyperparameter tuning:", 
+                                      top_5_models, 
+                                      key='model_selection')
+
+            # Show educational info for the selected model
+            show_method_info(best_model, show_educational_info)
+
+            if best_model != st.session_state.best_model:
+                st.session_state.best_model = best_model
+                
+                if best_model in functions.model_functions_dict:
+                    with st.spinner(f"Tuning hyperparameters for {best_model}..."):
+                        tuning_function = functions.model_functions_dict[best_model]
+                        best_estimator, best_params = tuning_function(X_train, y_train)
                     
-                    # Show educational info about all models if enabled
-                    if show_educational_info:
-                        with st.expander("📚 Learn about Machine Learning Models", expanded=False):
-                            st.markdown("""
-                            ### Popular Regression Models Explained:
-                            
-                            **Tree-Based Models:**
-                            - **Random Forest**: Ensemble of decision trees that vote on predictions. Reduces overfitting and provides feature importance.
-                            - **XGBoost**: Optimized gradient boosting that often achieves the best performance on structured data.
-                            - **LightGBM**: Fast gradient boosting framework good for large datasets.
-                            - **Gradient Boosting**: Sequentially builds trees to correct previous errors.
-                            
-                            **Linear Models:**
-                            - **Linear Regression**: Simple straight-line fit, very interpretable.
-                            - **Ridge/Lasso**: Regularized linear models that prevent overfitting.
-                            - **Elastic Net**: Combines benefits of both Ridge and Lasso.
-                            
-                            **Support Vector Models:**
-                            - **SVR**: Uses support vectors to find optimal prediction boundaries.
-                            - **NuSVR**: SVR variant with more interpretable parameters.
-                            
-                            **Neural Networks:**
-                            - **MLPRegressor**: Multi-layer neural network for complex patterns.
-                            
-                            **Other Models:**
-                            - **K-Nearest Neighbors**: Predicts based on similar training examples.
-                            - **AdaBoost**: Ensemble method that focuses on difficult samples.
-                            - **Bagging**: Reduces variance by averaging multiple models.
-                            
-                            [Learn more about Machine Learning Models](https://en.wikipedia.org/wiki/Machine_learning)
-                            """)
-                    
-                    st.session_state.models_df = models_df
-                    st.session_state.top_5_models = models_df.head(15).index.tolist()
-                    st.session_state.models_evaluated = True
-
-                models_df = st.session_state.models_df
-                top_5_models = st.session_state.top_5_models
-
-                # Cross-validation folds control
-                col1, col2 = st.columns([10, 1])
-                with col1:
-                    num_cv_folds = st.number_input(
-                        "Number of Cross-Validation Folds for Tuning",
-                        min_value=3,
-                        max_value=10,
-                        value=5,
-                        step=1,
-                        help="Number of folds to use for cross-validation during hyperparameter tuning"
-                    )
-                with col2:
-                    tooltip("Cross-validation splits data into k folds for robust hyperparameter tuning. More folds = more robust but slower training.")
-
-                # Store CV folds in session state for future use and logging
-                st.session_state.num_cv_folds = num_cv_folds
-
-                best_model = st.selectbox("Select a model for hyperparameter tuning:", 
-                                          top_5_models, 
-                                          key='model_selection')
-
-                # Show educational info for the selected model
-                show_method_info(best_model, show_educational_info)
-
-                if best_model != st.session_state.best_model:
-                    st.session_state.best_model = best_model
-                    st.write(f"🔧 **Step 2/4:** Tuning hyperparameters for {best_model}...")
-                    
-                    if best_model in functions.model_functions_dict:
-                        try:
-                            with st.spinner(f"Optimizing {best_model} parameters..."):
-                                tuning_function = functions.model_functions_dict[best_model]
-                                # Use safe wrapper for hyperparameter tuning
-                                best_estimator, best_params = functions.safe_hyperparameter_tuning(
-                                    tuning_function, best_model, X_train, y_train
-                                )
-                            
-                            if best_estimator is not None:
-                                st.success(f"✅ Hyperparameter tuning completed!")
-                                st.subheader(f"Hyperparameter Tuning Results for {best_model}")
-                                st.write("Best Parameters:", best_params)
-                                model_obj = best_estimator
-                            else:
-                                st.warning(f"⚠️ Hyperparameter tuning failed for {best_model}. Using default model.")
-                                model_obj = functions.get_model_object(best_model)
-                                with st.spinner("Training model with default parameters..."):
-                                    model_obj.fit(X_train, y_train)
-                                st.info("✅ Model trained with default parameters.")
-                        except Exception as e:
-                            st.error(f"❌ Error during hyperparameter tuning: {str(e)}")
-                            st.warning("Using default model parameters as fallback.")
-                            model_obj = functions.get_model_object(best_model)
-                            model_obj.fit(X_train, y_train)
+                    if best_estimator is not None:
+                        st.subheader(f"Hyperparameter Tuning Results for {best_model}")
+                        st.write("Best Parameters:", best_params)
+                        model_obj = best_estimator
                     else:
-                        st.info(f"ℹ️ No hyperparameter tuning available for {best_model}. Using default model.")
+                        st.warning(f"Hyperparameter tuning failed for {best_model}. Using default model.")
                         model_obj = functions.get_model_object(best_model)
-                        with st.spinner("Training model..."):
-                            model_obj.fit(X_train, y_train)
-                        st.success("✅ Model trained successfully!")
-
-                    st.session_state.model_obj = model_obj
-                    
-                    # Cleanup memory after training
-                    functions.cleanup_memory()
-
-                model_obj = st.session_state.model_obj
-                y_pred = model_obj.predict(X_test)
-                
-                st.write("📈 **Step 3/4:** Evaluating model performance...")
-                
-                # Model evaluation
-                mae = mean_absolute_error(y_test, y_pred)
-                mse = mean_squared_error(y_test, y_pred)
-                rmse = np.sqrt(mse)
-                r2 = r2_score(y_test, y_pred)
-                
-                # Log model performance
-                iteration_data = {
-                    **preprocessing_choices,
-                    "model_name": best_model,
-                    "metrics": {
-                        "mae": mae,
-                        "mse": mse,
-                        "rmse": rmse,
-                        "r2": r2
-                    },
-                    "split_percentage": split_percentage,
-                    "cv_folds": st.session_state.get('num_cv_folds', 5)  # Default to 5 if not set
-                }
-                st.session_state.model_logger.log_iteration(iteration_data)
-                
-                # Display metrics
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("MAE", f"{mae:.4f}")
-                col2.metric("MSE", f"{mse:.4f}")
-                col3.metric("RMSE", f"{rmse:.4f}")
-                col4.metric("R²", f"{r2:.4f}")
-
-                # Add download button for logs
-                if len(st.session_state.model_logger.logs) > 0:
-                    st.session_state.model_logger.save_logs()
-                    
-                    # Read the CSV file and create a download button
-                    with open('model_iterations.csv', 'r') as f:
-                        st.download_button(
-                            label="Download Model Iterations Log (CSV)",
-                            data=f.read(),
-                            file_name="model_iterations.csv",
-                            mime="text/csv"
-                        )
-                    
-                    # Display the log as a table in the app
-                    st.subheader("Model Iteration History")
-                    log_df = st.session_state.model_logger.get_logs_df()
-                    st.dataframe(log_df)
-
-                st.write("📊 **Step 4/4:** Generating visualizations and explanations...")
-                
-                # True vs Predicted Plot
-                st.subheader("True Vs Prediction Plot")
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', 
-                                         marker=dict(color='blue', opacity=0.5),
-                                         name='Predicted vs True Values'))
-                fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()],
-                                         mode='lines', line=dict(color='black', dash='dash'),
-                                         name='1:1 Line'))
-                fig.update_layout(title='True vs Predicted Values',
-                                  xaxis_title='True Values',
-                                  yaxis_title='Predicted Values',
-                                  showlegend=True,
-                                  width=800,
-                                  height=600)
-                st.plotly_chart(fig)
-                
-                # Feature Importance
-                st.subheader("Feature Importance")
-                
-                # Show educational info for feature importance
-                if show_educational_info:
-                    with st.expander("📚 Understanding Feature Importance", expanded=False):
-                        st.markdown("""
-                        **Feature Importance** shows which variables most influence your model's predictions.
-                        
-                        - **Higher values** = More important features
-                        - **Lower values** = Less important features
-                        
-                        This helps you understand what drives your predictions and can guide feature selection for future models.
-                        
-                        [Learn more about Feature Importance](https://en.wikipedia.org/wiki/Feature_importance)
-                        """)
-                
-                try:
-                    importances = model_obj.feature_importances_ if hasattr(model_obj, 'feature_importances_') else permutation_importance(model_obj, X_train, y_train, n_repeats=10, random_state=42).importances_mean
-                    indices = np.argsort(importances)[::-1]
-                    names = [X_train.columns[i] for i in indices]
-                    importance_values = [importances[i] for i in indices]
-
-                    fig = go.Figure(go.Pie(labels=names, values=importance_values,
-                                           textinfo='label+percent', hole=0.3,
-                                           marker=dict(colors=plt.cm.Set3.colors, line=dict(color='white', width=2))))
-
-                    fig.update_layout(title_text="Feature Importance", margin=dict(l=0, r=0, t=60, b=0))
-                    st.plotly_chart(fig)
-                except Exception as e:
-                    st.warning(f"⚠️ Could not generate feature importance plot: {str(e)}")
-                
-                # PDP Plots
-                st.subheader("PDP Plots")
-                
-                # Show educational info for PDP plots
-                if show_educational_info:
-                    with st.expander("📚 Understanding Partial Dependence Plots (PDP)", expanded=False):
-                        st.markdown("""
-                        **Partial Dependence Plots** show how each feature affects predictions while accounting for other features.
-                        
-                        - **X-axis**: Feature values
-                        - **Y-axis**: Average prediction
-                        - **Trend**: Shows if the feature has a positive, negative, or complex relationship with predictions
-                        
-                        [Learn more about Partial Dependence Plots](https://en.wikipedia.org/wiki/Partial_dependence_plot)
-                        """)
-                
-                # Use safe PDP generation
-                fig, features_plotted, was_sampled, was_limited = functions.safe_pdp_generation(
-                    model_obj, X_train, target_column, max_features=15, sample_size=2000
-                )
-                
-                if fig is not None:
-                    if was_sampled:
-                        st.info("📊 Dataset sampled to 2000 rows for faster PDP generation.")
-                    if was_limited:
-                        st.info(f"📊 Showing PDP plots for the first {len(features_plotted)} features (out of {len(X_train.columns)} total).")
-                    st.pyplot(fig)
-                    plt.close(fig)  # Clean up memory
+                        model_obj.fit(X_train, y_train)
                 else:
-                    st.warning("⚠️ Could not generate PDP plots. Try with fewer features or a smaller dataset.")
+                    st.info(f"No hyperparameter tuning function available for {best_model}. Using default model.")
+                    model_obj = functions.get_model_object(best_model)
+                    model_obj.fit(X_train, y_train)
 
-                # SHAP Value Plot
-                st.subheader("SHAP Value Plot")
-                
-                # Show educational info for SHAP values
-                if show_educational_info:
-                    with st.expander("📚 Understanding SHAP Values", expanded=False):
-                        st.markdown("""
-                        **SHAP (SHapley Additive exPlanations)** values explain how each feature contributes to predictions.
-                        
-                        - **Red bars**: Features pushing predictions higher
-                        - **Blue bars**: Features pushing predictions lower
-                        - **Bar length**: Magnitude of feature's impact
-                        - **Position**: Feature value (high/low)
-                        
-                        This provides both global and local interpretability of your model.
-                        
-                        [Learn more about SHAP Values](https://en.wikipedia.org/wiki/Shapley_value)
-                        """)
-                
-                # Use safe SHAP calculation
-                shap_values, X_sampled, was_sampled = functions.safe_shap_calculation(
-                    model_obj, X_test, max_samples=1000, max_display=100
-                )
-                
-                if shap_values is not None:
-                    try:
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        shap.plots.beeswarm(shap_values, order=shap_values.abs.max(0))
-                        st.pyplot(fig)
-                        plt.close(fig)  # Clean up memory
-                    except Exception as e:
-                        st.warning(f"⚠️ Could not display SHAP plot: {str(e)}")
-                else:
-                    st.warning("⚠️ SHAP calculation failed. This feature requires compatible models and may not work with all model types.")
+                st.session_state.model_obj = model_obj
 
-                # Mark status as complete
-                status.update(label="✅ Model training complete!", state="complete", expanded=False)
+            model_obj = st.session_state.model_obj
+            y_pred = model_obj.predict(X_test)
+            
+            # Model evaluation
+            mae = mean_absolute_error(y_test, y_pred)
+            mse = mean_squared_error(y_test, y_pred)
+            rmse = np.sqrt(mse)
+            r2 = r2_score(y_test, y_pred)
+            
+            # Log model performance
+            iteration_data = {
+                **preprocessing_choices,
+                "model_name": best_model,
+                "metrics": {
+                    "mae": mae,
+                    "mse": mse,
+                    "rmse": rmse,
+                    "r2": r2
+                },
+                "split_percentage": split_percentage,
+                "cv_folds": st.session_state.get('num_cv_folds', 5)  # Default to 5 if not set
+            }
+            st.session_state.model_logger.log_iteration(iteration_data)
+            
+            # Display metrics
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("MAE", f"{mae:.4f}")
+            col2.metric("MSE", f"{mse:.4f}")
+            col3.metric("RMSE", f"{rmse:.4f}")
+            col4.metric("R²", f"{r2:.4f}")
 
-                # Save Model
-                if st.button("Save Model"):
-                    model_filename = f"{best_model}_model.pkl"
-                    serialized_model = pickle.dumps(model_obj)
+            # Add download button for logs
+            if len(st.session_state.model_logger.logs) > 0:
+                st.session_state.model_logger.save_logs()
                 
+                # Read the CSV file and create a download button
+                with open('model_iterations.csv', 'r') as f:
                     st.download_button(
-                        label="Download Model",
-                        data=serialized_model,
-                        file_name=model_filename,
-                        mime="application/octet-stream",
+                        label="Download Model Iterations Log (CSV)",
+                        data=f.read(),
+                        file_name="model_iterations.csv",
+                        mime="text/csv"
                     )
                 
-                    st.success(f"Model saved (available for download).")
+                # Display the log as a table in the app
+                st.subheader("Model Iteration History")
+                log_df = st.session_state.model_logger.get_logs_df()
+                st.dataframe(log_df)
 
-            except Exception as e:
-                status.update(label="❌ Error during training", state="error")
-                st.error(f"Error during model training and evaluation: {str(e)}")
-                st.info("💡 Try simplifying your workflow: reduce dataset size, select fewer features, or use a simpler model.")
+            # True vs Predicted Plot
+            st.subheader("True Vs Prediction Plot")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', 
+                                     marker=dict(color='blue', opacity=0.5),
+                                     name='Predicted vs True Values'))
+            fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()],
+                                     mode='lines', line=dict(color='black', dash='dash'),
+                                     name='1:1 Line'))
+            fig.update_layout(title='True vs Predicted Values',
+                              xaxis_title='True Values',
+                              yaxis_title='Predicted Values',
+                              showlegend=True,
+                              width=800,
+                              height=600)
+            st.plotly_chart(fig)
+            
+            # Feature Importance
+            st.subheader("Feature Importance")
+            
+            # Show educational info for feature importance
+            if show_educational_info:
+                with st.expander("📚 Understanding Feature Importance", expanded=False):
+                    st.markdown("""
+                    **Feature Importance** shows which variables most influence your model's predictions.
+                    
+                    - **Higher values** = More important features
+                    - **Lower values** = Less important features
+                    
+                    This helps you understand what drives your predictions and can guide feature selection for future models.
+                    
+                    [Learn more about Feature Importance](https://en.wikipedia.org/wiki/Feature_importance)
+                    """)
+            
+            importances = model_obj.feature_importances_ if hasattr(model_obj, 'feature_importances_') else permutation_importance(model_obj, X_train, y_train, n_repeats=10, random_state=42).importances_mean
+            indices = np.argsort(importances)[::-1]
+            names = [X_train.columns[i] for i in indices]
+            importance_values = [importances[i] for i in indices]
+
+            fig = go.Figure(go.Pie(labels=names, values=importance_values,
+                                   textinfo='label+percent', hole=0.3,
+                                   marker=dict(colors=plt.cm.Set3.colors, line=dict(color='white', width=2))))
+
+            fig.update_layout(title_text="Feature Importance", margin=dict(l=0, r=0, t=60, b=0))
+            st.plotly_chart(fig)
+            
+            # PDP Plots
+            st.subheader("PDP Plots")
+            
+            # Show educational info for PDP plots
+            if show_educational_info:
+                with st.expander("📚 Understanding Partial Dependence Plots (PDP)", expanded=False):
+                    st.markdown("""
+                    **Partial Dependence Plots** show how each feature affects predictions while accounting for other features.
+                    
+                    - **X-axis**: Feature values
+                    - **Y-axis**: Average prediction
+                    - **Trend**: Shows if the feature has a positive, negative, or complex relationship with predictions
+                    
+                    [Learn more about Partial Dependence Plots](https://en.wikipedia.org/wiki/Partial_dependence_plot)
+                    """)
+            
+            with st.spinner("Generating PDP plots..."):
+                num_features = len(X_train.columns)
+                max_plots_per_row = 5
+                num_rows = (num_features + max_plots_per_row - 1) // max_plots_per_row
+                num_cols = min(num_features, max_plots_per_row)
+                    
+                fig, axs = plt.subplots(num_rows, num_cols, figsize=(5 * num_cols, 5 * num_rows), constrained_layout=True)
+                axs = axs.flatten() if num_features > 1 else [axs]
+                
+                for j, selected_feature in enumerate(X_train.columns):
+                    features_info = {
+                        "features": [selected_feature],
+                        "kind": "average",
+                    }
+                
+                    display = PartialDependenceDisplay.from_estimator(
+                        model_obj,
+                        X_train,
+                        **features_info,
+                        ax=axs[j],
+                        line_kw={"lw": 3}
+                    )
+                
+                    axs[j].set_title(f"PDP for {selected_feature}")
+                    axs[j].set_xlabel(selected_feature)
+                    axs[j].set_ylabel(f"Partial Dependence for {target_column}")
+                    axs[j].set_facecolor('#f0f0f0')
+            
+                fig.suptitle(f"Partial Dependence of {target_column} on Selected Features", y=1.02)
+                plt.tight_layout()
+                st.pyplot(fig)
+
+            # SHAP Value Plot
+            st.subheader("SHAP Value Plot")
+            
+            # Show educational info for SHAP values
+            if show_educational_info:
+                with st.expander("📚 Understanding SHAP Values", expanded=False):
+                    st.markdown("""
+                    **SHAP (SHapley Additive exPlanations)** values explain how each feature contributes to predictions.
+                    
+                    - **Red bars**: Features pushing predictions higher
+                    - **Blue bars**: Features pushing predictions lower
+                    - **Bar length**: Magnitude of feature's impact
+                    - **Position**: Feature value (high/low)
+                    
+                    This provides both global and local interpretability of your model.
+                    
+                    [Learn more about SHAP Values](https://en.wikipedia.org/wiki/Shapley_value)
+                    """)
+            
+            with st.spinner("Calculating SHAP values..."):
+                explainer = shap.Explainer(model_obj, X_test)
+                shap_values = explainer(X_test)
+            
+                fig, ax = plt.subplots(figsize=(10, 6))
+                shap.plots.beeswarm(shap_values, order=shap_values.abs.max(0))
+                st.pyplot(fig)
+
+            # Save Model
+            if st.button("Save Model"):
+                model_filename = f"{best_model}_model.pkl"
+                serialized_model = pickle.dumps(model_obj)
+            
+                st.download_button(
+                    label="Download Model",
+                    data=serialized_model,
+                    file_name=model_filename,
+                    mime="application/octet-stream",
+                )
+            
+                st.success(f"Model saved (available for download).")
+
+        except Exception as e:
+            st.error(f"Error during model training and evaluation: {str(e)}")
 
 else:
     st.info("Please upload a data file to continue.")
