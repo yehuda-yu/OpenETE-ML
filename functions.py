@@ -37,32 +37,10 @@ from functools import wraps
 
 
 def optimized_cache(func):
-    """
-    Memory-aware caching decorator that skips caching for very large datasets.
-    This prevents memory issues with large cached objects.
-    """
     @wraps(func)
+    @st.cache_data
     def wrapper(*args, **kwargs):
-        # Check if any args are DataFrames and if they're too large to cache
-        skip_cache = False
-        for arg in args:
-            if isinstance(arg, pd.DataFrame):
-                # Skip caching if DataFrame is larger than 50MB in memory
-                memory_usage = arg.memory_usage(deep=True).sum() / (1024 * 1024)  # Convert to MB
-                if memory_usage > 50:
-                    skip_cache = True
-                    break
-        
-        if skip_cache:
-            # For large datasets, don't use cache
-            return func(*args, **kwargs)
-        else:
-            # For smaller datasets, use streamlit's cache with max_entries limit
-            @st.cache_data(max_entries=10, ttl=3600)  # Cache max 10 items, expire after 1 hour
-            def cached_func(*args, **kwargs):
-                return func(*args, **kwargs)
-            return cached_func(*args, **kwargs)
-    
+        return func(*args, **kwargs)
     return wrapper
 
 @optimized_cache
@@ -573,7 +551,7 @@ def encode_categorical_label(data):
 @optimized_cache
 def evaluate_regression_models(X_train, X_test, y_train, y_test):
     """
-    This function evaluates various regression models using LazyRegressor with enhanced error handling.
+    This function evaluates various regression models using LazyRegressor.
     
     Inputs:
     - X_train: Training features (array-like, shape (n_samples, n_features))
@@ -583,68 +561,26 @@ def evaluate_regression_models(X_train, X_test, y_train, y_test):
     
     Returns:
     - models_df: DataFrame containing information about various regression models
+    - predictions_df: DataFrame containing predictions of various regression models
     """
     try:
-        # Initialize LazyRegressor with warnings ignored for better stability
-        reg = LazyRegressor.LazyRegressor(verbose=1, ignore_warnings=True, custom_metric=None, predictions=False)
+        # Initialize LazyRegressor
+        reg = LazyRegressor.LazyRegressor(verbose=1, ignore_warnings=False, custom_metric=None, predictions=True)
         
-        # Fit LazyRegressor on the data - it has internal error handling per model
-        models_df = reg.fit(X_train, X_test, y_train, y_test)
-        
-        # Cleanup memory after model evaluation
-        cleanup_memory()
+        # Fit LazyRegressor on the data
+        models_df, predictions_df = reg.fit(X_train, X_test, y_train, y_test)
         
         return models_df
         
     except Exception as e:
-        st.error(f"Error during model evaluation: {e}")
-        st.warning("Model evaluation failed. Please check your data or try with a smaller dataset.")
-        # Return empty DataFrame instead of crashing
-        return pd.DataFrame()
+        print(f"An error occurred: {e}")
+        raise e
 
-
-# Hyperparameter Tuning Safety Wrapper
-def safe_hyperparameter_tuning(tune_func, model_name, X_train, y_train):
-    """
-    Wrapper for hyperparameter tuning functions with enhanced error handling and stability.
-    
-    Args:
-        tune_func: The tuning function to call
-        model_name: Name of the model being tuned
-        X_train: Training features
-        y_train: Training target
-        
-    Returns:
-        tuple: (best_estimator, best_params) or (None, None) if failed
-    """
-    try:
-        # Adjust n_iter based on dataset size to prevent excessive runtime
-        n_rows = len(X_train)
-        if n_rows > 10000:
-            # For large datasets, reduce search iterations
-            st.info(f"⚡ Large dataset detected ({n_rows} rows). Using optimized tuning parameters for faster training.")
-        
-        # Call the tuning function
-        result = tune_func(X_train, y_train)
-        
-        # Cleanup after tuning
-        cleanup_memory()
-        
-        return result
-        
-    except Exception as e:
-        st.warning(f"⚠️ Hyperparameter tuning failed for {model_name}: {str(e)}")
-        st.info(f"💡 Using default {model_name} parameters instead. You can still train the model.")
-        return None, None
 
 def tune_LassoCV_model(X_train, y_train):
     try:
         # Define the model
         lasso_cv = LassoCV()
-
-        # Adjust n_iter based on dataset size
-        n_rows = len(X_train)
-        n_iter = 30 if n_rows > 5000 else 50
 
         # Define hyperparameters to tune
         param_dist = {
@@ -660,7 +596,7 @@ def tune_LassoCV_model(X_train, y_train):
             "selection": ['cyclic', 'random']
         }
         # Perform RandomizedSearchCV
-        random_search = RandomizedSearchCV(lasso_cv, param_distributions=param_dist, n_iter=n_iter, cv=5, random_state=42)
+        random_search = RandomizedSearchCV(lasso_cv, param_distributions=param_dist, n_iter=50, cv=5, random_state=42)
         random_search.fit(X_train, y_train)
 
         # Best parameters and best score
@@ -671,8 +607,8 @@ def tune_LassoCV_model(X_train, y_train):
         return random_search.best_estimator_,random_search.best_score_
     
     except Exception as e:
-        print(f"Error tuning LassoCV: {e}")
-        return None, None
+        st.error(f"An error occurred while tuning LassoCV model: {e}")
+        return None
 
 def tune_LassoLarsCV_model(X_train, y_train):
     try:
@@ -2224,185 +2160,6 @@ def remove_outliers_by_threshold(df, column, condition, threshold_value=None, mi
         df_clean = df_clean[(df_clean[column] >= min_threshold) & (df_clean[column] <= max_threshold)]
     
     return df_clean
-
-# Memory Management and Safety Functions
-def cleanup_memory():
-    """
-    Force garbage collection and clear unused memory.
-    Call this between expensive operations to prevent memory buildup.
-    """
-    import gc
-    gc.collect()
-    
-def check_dataset_size(data, size_threshold=10000):
-    """
-    Check if dataset exceeds size threshold for expensive operations.
-    
-    Args:
-        data: DataFrame or array-like
-        size_threshold: Maximum number of rows before warning
-        
-    Returns:
-        tuple: (is_large, num_rows, num_cols)
-    """
-    if isinstance(data, pd.DataFrame):
-        num_rows, num_cols = data.shape
-    else:
-        num_rows = len(data)
-        num_cols = data.shape[1] if len(data.shape) > 1 else 1
-    
-    is_large = num_rows > size_threshold
-    return is_large, num_rows, num_cols
-
-def safe_shap_calculation(model, X_test, max_samples=1000, max_display=100):
-    """
-    Calculate SHAP values with automatic sampling for large datasets.
-    
-    Args:
-        model: Trained model object
-        X_test: Test features
-        max_samples: Maximum samples to use for SHAP calculation
-        max_display: Maximum samples to display in plot
-        
-    Returns:
-        shap_values: SHAP values object or None if failed
-        X_sampled: Sampled X_test used for calculation
-        was_sampled: Boolean indicating if sampling occurred
-    """
-    try:
-        import shap
-        
-        # Check if dataset is large
-        is_large, num_rows, _ = check_dataset_size(X_test, size_threshold=max_samples)
-        was_sampled = False
-        
-        if is_large:
-            # Sample the dataset
-            sample_size = min(max_samples, num_rows)
-            indices = np.random.choice(num_rows, size=sample_size, replace=False)
-            X_sampled = X_test.iloc[indices] if isinstance(X_test, pd.DataFrame) else X_test[indices]
-            was_sampled = True
-            st.info(f"📊 Large dataset detected ({num_rows} rows). Using {sample_size} samples for SHAP calculation to ensure stability.")
-        else:
-            X_sampled = X_test
-        
-        # Calculate SHAP values
-        explainer = shap.Explainer(model, X_sampled)
-        shap_values = explainer(X_sampled[:max_display] if len(X_sampled) > max_display else X_sampled)
-        
-        return shap_values, X_sampled, was_sampled
-        
-    except Exception as e:
-        st.error(f"⚠️ SHAP calculation failed: {str(e)}")
-        st.info("💡 Try reducing your dataset size or skipping SHAP analysis.")
-        return None, None, False
-
-def safe_pdp_generation(model_obj, X_train, target_column, max_features=15, sample_size=2000):
-    """
-    Generate Partial Dependence Plots with automatic feature and sample limiting.
-    
-    Args:
-        model_obj: Trained model
-        X_train: Training features
-        target_column: Name of target column
-        max_features: Maximum number of features to plot
-        sample_size: Maximum samples to use for PDP
-        
-    Returns:
-        tuple: (fig, features_to_plot, was_sampled, was_limited)
-    """
-    try:
-        from sklearn.inspection import PartialDependenceDisplay
-        
-        # Limit number of features
-        num_features = len(X_train.columns)
-        features_to_plot = X_train.columns[:min(num_features, max_features)].tolist()
-        was_limited = num_features > max_features
-        
-        # Sample data if too large
-        is_large, num_rows, _ = check_dataset_size(X_train, size_threshold=sample_size)
-        was_sampled = False
-        
-        if is_large:
-            sample_indices = np.random.choice(num_rows, size=sample_size, replace=False)
-            X_sampled = X_train.iloc[sample_indices]
-            was_sampled = True
-        else:
-            X_sampled = X_train
-        
-        # Generate plots
-        num_plots = len(features_to_plot)
-        max_plots_per_row = 5
-        num_rows_plot = (num_plots + max_plots_per_row - 1) // max_plots_per_row
-        num_cols = min(num_plots, max_plots_per_row)
-        
-        fig, axs = plt.subplots(num_rows_plot, num_cols, figsize=(5 * num_cols, 5 * num_rows_plot), constrained_layout=True)
-        axs = axs.flatten() if num_plots > 1 else [axs]
-        
-        for j, selected_feature in enumerate(features_to_plot):
-            features_info = {
-                "features": [selected_feature],
-                "kind": "average",
-            }
-            
-            display = PartialDependenceDisplay.from_estimator(
-                model_obj,
-                X_sampled,
-                **features_info,
-                ax=axs[j],
-                line_kw={"lw": 3}
-            )
-            
-            axs[j].set_title(f"PDP for {selected_feature}")
-            axs[j].set_xlabel(selected_feature)
-            axs[j].set_ylabel(f"Partial Dependence for {target_column}")
-            axs[j].set_facecolor('#f0f0f0')
-        
-        # Hide empty subplots
-        for j in range(num_plots, len(axs)):
-            axs[j].set_visible(False)
-        
-        fig.suptitle(f"Partial Dependence of {target_column} on Selected Features", y=1.02)
-        plt.tight_layout()
-        
-        return fig, features_to_plot, was_sampled, was_limited
-        
-    except Exception as e:
-        st.error(f"⚠️ PDP generation failed: {str(e)}")
-        st.info("💡 Try reducing your dataset size or the number of features.")
-        return None, [], False, False
-
-def get_model_object(model_name):
-    """
-    Get a default model object by name.
-    Used as fallback when hyperparameter tuning fails.
-    
-    Args:
-        model_name: Name of the model
-        
-    Returns:
-        Instantiated model object with default parameters
-    """
-    model_mapping = {
-        'RandomForestRegressor': RandomForestRegressor(random_state=42, n_estimators=100),
-        'XGBRegressor': xgb.XGBRegressor(random_state=42, n_estimators=100),
-        'LGBMRegressor': lgb.LGBMRegressor(random_state=42, n_estimators=100),
-        'GradientBoostingRegressor': GradientBoostingRegressor(random_state=42, n_estimators=100),
-        'ExtraTreesRegressor': ExtraTreesRegressor(random_state=42, n_estimators=100),
-        'SVR': SVR(),
-        'NuSVR': NuSVR(),
-        'LinearRegression': LinearRegression(),
-        'Ridge': Ridge(),
-        'Lasso': Lasso(),
-        'ElasticNet': ElasticNet(),
-        'BayesianRidge': BayesianRidge(),
-        'KNeighborsRegressor': KNeighborsRegressor(),
-        'MLPRegressor': MLPRegressor(random_state=42, max_iter=500),
-        'AdaBoostRegressor': AdaBoostRegressor(random_state=42),
-        'BaggingRegressor': BaggingRegressor(random_state=42),
-    }
-    
-    return model_mapping.get(model_name, LinearRegression())
 
 # Logging Functions
 class ModelLogger:
