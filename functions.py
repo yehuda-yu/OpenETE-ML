@@ -5,6 +5,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+import umap
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder, LabelEncoder
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -209,6 +210,64 @@ def perform_tsne(data, target_column, categorical_columns, n_components=2):
     
     st.write(f"Number of features before t-SNE: {len(numerical_columns)}")
     st.write(f"Number of features after t-SNE: {n_components}")
+    
+    return df_final
+
+@optimized_cache
+def perform_umap(data, target_column, categorical_columns, n_components=2, n_neighbors=15, min_dist=0.1, metric='euclidean'):
+    """
+    Performs UMAP (Uniform Manifold Approximation and Projection) on the numerical columns of a DataFrame.
+    
+    Args:
+        data (pd.DataFrame): The input DataFrame containing features and target.
+        target_column (str): The name of the target column.
+        categorical_columns (list): A list of categorical column names.
+        n_components (int): The number of dimensions to reduce to (default is 2).
+        n_neighbors (int): The size of local neighborhood for manifold approximation (default is 15).
+        min_dist (float): The minimum distance between points in low dimensional representation (default is 0.1).
+        metric (str): The metric to use for distance computation (default is 'euclidean').
+    
+    Returns:
+        pd.DataFrame: The DataFrame with the UMAP transformed features.
+    """
+    X = data.drop(columns=[target_column])
+    y = data[target_column]
+    
+    numerical_columns = [col for col in X.columns if col not in categorical_columns]
+    
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X[numerical_columns])
+    
+    umap_model = umap.UMAP(n_components=n_components, n_neighbors=n_neighbors, 
+                           min_dist=min_dist, metric=metric, random_state=42)
+    X_umap = umap_model.fit_transform(X_scaled)
+    
+    df_umap = pd.DataFrame(X_umap, columns=[f"UMAP_{i+1}" for i in range(n_components)])
+    df_final = pd.concat([df_umap, data[categorical_columns], y], axis=1)
+    
+    if n_components == 2:
+        fig, ax = plt.subplots(figsize=(10, 8))
+        scatter = ax.scatter(df_umap['UMAP_1'], df_umap['UMAP_2'], c=y, cmap='viridis', alpha=0.7)
+        plt.colorbar(scatter)
+        plt.title('UMAP Visualization (2D)')
+        plt.xlabel('UMAP 1')
+        plt.ylabel('UMAP 2')
+        st.pyplot(fig)
+    elif n_components == 3:
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        scatter = ax.scatter(df_umap['UMAP_1'], df_umap['UMAP_2'], df_umap['UMAP_3'], c=y, cmap='viridis', alpha=0.7)
+        plt.colorbar(scatter)
+        ax.set_title('UMAP Visualization (3D)')
+        ax.set_xlabel('UMAP 1')
+        ax.set_ylabel('UMAP 2')
+        ax.set_zlabel('UMAP 3')
+        st.pyplot(fig)
+    else:
+        st.write("Visualization is only available for 2 or 3 components. For higher dimensions, please refer to the data table.")
+    
+    st.write(f"Number of features before UMAP: {len(numerical_columns)}")
+    st.write(f"Number of features after UMAP: {n_components}")
     
     return df_final
 
