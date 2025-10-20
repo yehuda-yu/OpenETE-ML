@@ -11,6 +11,7 @@ import shap
 import pickle
 import functions  # Assuming this contains your custom functions
 import numbers
+import time
 
 # Helper function to robustly replace values with NaN in all columns
 def robust_replace_with_nan(df, values):
@@ -1449,21 +1450,40 @@ if uploaded_file is not None:
                 
                 if best_model in functions.model_functions_dict:
                     with st.spinner(f"Tuning hyperparameters for {best_model}..."):
+                        tuning_start_time = time.time()
                         tuning_function = functions.model_functions_dict[best_model]
                         best_estimator, best_params = tuning_function(X_train, y_train)
+                        tuning_time = time.time() - tuning_start_time
                     
                     if best_estimator is not None:
                         st.subheader(f"Hyperparameter Tuning Results for {best_model}")
-                        st.write("Best Parameters:", best_params)
+                        
+                        # Display tuning time
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.write("**Best Parameters:**", best_params)
+                        with col2:
+                            st.metric("Tuning Time", f"{tuning_time:.2f}s")
+                        
+                        # Store tuning time for logging
+                        st.session_state.tuning_time = tuning_time
                         model_obj = best_estimator
                     else:
                         st.warning(f"Hyperparameter tuning failed for {best_model}. Using default model.")
                         model_obj = functions.get_model_object(best_model)
+                        
+                        fit_start_time = time.time()
                         model_obj.fit(X_train, y_train)
+                        fit_time = time.time() - fit_start_time
+                        st.session_state.tuning_time = fit_time
                 else:
                     st.info(f"No hyperparameter tuning function available for {best_model}. Using default model.")
                     model_obj = functions.get_model_object(best_model)
+                    
+                    fit_start_time = time.time()
                     model_obj.fit(X_train, y_train)
+                    fit_time = time.time() - fit_start_time
+                    st.session_state.tuning_time = fit_time
 
                 st.session_state.model_obj = model_obj
 
@@ -1487,16 +1507,29 @@ if uploaded_file is not None:
                     "r2": r2
                 },
                 "split_percentage": split_percentage,
-                "cv_folds": st.session_state.get('num_cv_folds', 5)  # Default to 5 if not set
+                "cv_folds": st.session_state.get('num_cv_folds', 5),  # Default to 5 if not set
+                "tuning_time_seconds": st.session_state.get('tuning_time', None)
             }
             st.session_state.model_logger.log_iteration(iteration_data)
             
             # Display metrics
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("MAE", f"{mae:.4f}")
             col2.metric("MSE", f"{mse:.4f}")
             col3.metric("RMSE", f"{rmse:.4f}")
             col4.metric("R²", f"{r2:.4f}")
+            
+            # Display tuning time if available
+            if 'tuning_time' in st.session_state and st.session_state.tuning_time is not None:
+                tuning_time_display = st.session_state.tuning_time
+                if tuning_time_display < 60:
+                    col5.metric("Tuning Time", f"{tuning_time_display:.2f}s")
+                else:
+                    minutes = int(tuning_time_display // 60)
+                    seconds = tuning_time_display % 60
+                    col5.metric("Tuning Time", f"{minutes}m {seconds:.0f}s")
+            else:
+                col5.metric("Tuning Time", "N/A")
 
             # Add download button for logs
             if len(st.session_state.model_logger.logs) > 0:
