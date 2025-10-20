@@ -124,6 +124,10 @@ ML_METHODS_INFO = {
         "description": "Non-linear dimensionality reduction for visualization. Preserves local structure of high-dimensional data.",
         "link": "https://en.wikipedia.org/wiki/T-distributed_stochastic_neighbor_embedding"
     },
+    "UMAP": {
+        "description": "Modern non-linear dimensionality reduction technique. Faster than t-SNE and preserves both local and global structure. Ideal for large datasets and feature engineering.",
+        "link": "https://en.wikipedia.org/wiki/Nonlinear_dimensionality_reduction#Uniform_manifold_approximation_and_projection"
+    },
     
     # Feature Selection
     "NDSI": {
@@ -994,9 +998,9 @@ if uploaded_file is not None:
         if reduction_method == "Feature Extraction":
             col1, col2 = st.columns([10, 1])
             with col1:
-                extraction_method = st.selectbox("Choose extraction method", ["PCA", "Time Series", "t-SNE"])
+                extraction_method = st.selectbox("Choose extraction method", ["PCA", "Time Series", "t-SNE", "UMAP"])
             with col2:
-                tooltip("PCA: Principal Component Analysis reduces dimensions while preserving variance. Time Series: Extracts features from temporal data. t-SNE: Non-linear technique for complex data")
+                tooltip("PCA: Principal Component Analysis reduces dimensions while preserving variance. Time Series: Extracts features from temporal data. t-SNE: Non-linear technique for complex data. UMAP: Modern, faster alternative to t-SNE")
             
             show_method_info(extraction_method, show_educational_info)
             
@@ -1068,6 +1072,42 @@ if uploaded_file is not None:
                             st.dataframe(st.session_state.data.head(), width=700, height=200)
                     except Exception as e:
                         st.error(f"Error applying t-SNE: {str(e)}")
+                        st.error("Please ensure your data is properly preprocessed and contains numeric features.")
+            
+            elif extraction_method == "UMAP":
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    n_components = st.slider("Select the number of UMAP components", 2, 10, 2, step=1)
+                with col2:
+                    tooltip("Number of dimensions to reduce your data to. Usually 2 or 3 for visualization purposes")
+                
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    n_neighbors = st.slider("Number of neighbors", 5, 50, 15, step=5)
+                with col2:
+                    tooltip("Controls local vs global structure preservation. Lower values focus on local structure, higher values on global structure")
+                
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    min_dist = st.slider("Minimum distance", 0.0, 1.0, 0.1, step=0.05)
+                with col2:
+                    tooltip("Controls how tightly points are packed together. Lower values create more clustered embeddings")
+                
+                if st.button("Apply UMAP", key="apply_umap"):
+                    try:
+                        with st.spinner("Applying UMAP..."):
+                            st.session_state.data = functions.perform_umap(
+                                st.session_state.data, target_column, categorical_columns, 
+                                n_components=n_components, n_neighbors=n_neighbors, min_dist=min_dist
+                            )
+                        
+                        st.success(f"UMAP applied successfully! Reduced to {n_components} components.")
+                        st.session_state.step4_done = True
+                        
+                        with st.expander("UMAP Results"):
+                            st.dataframe(st.session_state.data.head(), width=700, height=200)
+                    except Exception as e:
+                        st.error(f"Error applying UMAP: {str(e)}")
                         st.error("Please ensure your data is properly preprocessed and contains numeric features.")
         
         elif reduction_method == "Feature Selection":
