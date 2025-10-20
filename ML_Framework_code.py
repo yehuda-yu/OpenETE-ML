@@ -1463,7 +1463,14 @@ if uploaded_file is not None:
                         with col1:
                             st.write("**Best Parameters:**", best_params)
                         with col2:
-                            st.metric("Tuning Time", f"{tuning_time:.2f}s")
+                            # Format time display based on duration
+                            if tuning_time < 60:
+                                time_display = f"{tuning_time:.2f}s"
+                            else:
+                                minutes = int(tuning_time // 60)
+                                seconds = tuning_time % 60
+                                time_display = f"{minutes}m {seconds:.0f}s"
+                            st.metric("Tuning Time", time_display)
                         
                         # Store tuning time for logging
                         st.session_state.tuning_time = tuning_time
