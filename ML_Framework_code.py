@@ -12,6 +12,7 @@ import pickle
 import functions  # Assuming this contains your custom functions
 import numbers
 import time
+import gc
 
 # Helper function to robustly replace values with NaN in all columns
 def robust_replace_with_nan(df, values):
@@ -1379,6 +1380,10 @@ if uploaded_file is not None:
                 st.subheader("Regression Models Performance on Training Set")
                 with st.spinner("Running multiple regression models on your data. This may take up to a few minutes depending on dataset size and model complexity..."):
                     models_df = functions.evaluate_regression_models(X_train, X_test, y_train, y_test)
+                
+                # Memory cleanup after model evaluation
+                gc.collect()
+                
                 models_df = models_df.sort_values(by='R-Squared', ascending=False)
                 st.dataframe(models_df[['R-Squared','RMSE','Time Taken']])
                 
@@ -1454,6 +1459,9 @@ if uploaded_file is not None:
                         tuning_function = functions.model_functions_dict[best_model]
                         best_estimator, best_params = tuning_function(X_train, y_train)
                         tuning_time = time.time() - tuning_start_time
+                    
+                    # Memory cleanup after hyperparameter tuning
+                    gc.collect()
                     
                     if best_estimator is not None:
                         st.subheader(f"Hyperparameter Tuning Results for {best_model}")
@@ -1649,6 +1657,10 @@ if uploaded_file is not None:
                 fig.suptitle(f"Partial Dependence of {target_column} on Selected Features", y=1.02)
                 plt.tight_layout()
                 st.pyplot(fig)
+            
+            # Memory cleanup after PDP plots
+            plt.close('all')
+            gc.collect()
 
             # SHAP Value Plot
             st.subheader("SHAP Value Plot")
@@ -1676,6 +1688,10 @@ if uploaded_file is not None:
                 fig, ax = plt.subplots(figsize=(10, 6))
                 shap.plots.beeswarm(shap_values, order=shap_values.abs.max(0))
                 st.pyplot(fig)
+            
+            # Memory cleanup after SHAP calculations
+            plt.close('all')
+            gc.collect()
 
             # Save Model
             if st.button("Save Model"):
