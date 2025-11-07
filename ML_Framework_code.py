@@ -144,6 +144,10 @@ ML_METHODS_INFO = {
         "description": "Iteratively removes least important features. Uses model performance to determine feature importance.",
         "link": "https://en.wikipedia.org/wiki/Feature_selection"
     },
+    "Boruta": {
+        "description": "All-relevant feature selection method that finds ALL features carrying useful information for prediction, not just a minimal set. More comprehensive than RFE/SelectKBest.",
+        "link": "https://github.com/scikit-learn-contrib/boruta_py"
+    },
     
     # Cross-Validation
     "Cross-Validation": {
@@ -1131,9 +1135,9 @@ if uploaded_file is not None:
         elif reduction_method == "Feature Selection":
             col1, col2 = st.columns([10, 1])
             with col1:
-                selection_method = st.selectbox("Choose selection method", ["NDSI", "SelectKBest", 'RFE'])
+                selection_method = st.selectbox("Choose selection method", ["NDSI", "SelectKBest", 'RFE', 'Boruta'])
             with col2:
-                tooltip("NDSI: Normalized Difference Spectral Index. SelectKBest: Selects top k features based on statistical tests. RFE: Recursive Feature Elimination")
+                tooltip("NDSI: Normalized Difference Spectral Index. SelectKBest: Selects top k features. RFE: Recursive Feature Elimination. Boruta: All-relevant feature selection")
             
             show_method_info(selection_method, show_educational_info)
             
@@ -1287,6 +1291,39 @@ if uploaded_file is not None:
                             st.dataframe(st.session_state.data, width=700, height=200)
                     except Exception as e:
                         st.error(f"Error applying {selection_method}: {str(e)}")
+                        st.error("Please ensure your data contains sufficient numeric features for selection.")
+            
+            elif selection_method == "Boruta":
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    max_iter = st.slider("Maximum iterations", 50, 200, 100, step=10)
+                with col2:
+                    tooltip("Number of iterations for Boruta algorithm. Higher values = more thorough but slower")
+                
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    alpha = st.slider("Significance level (alpha)", 0.01, 0.10, 0.05, step=0.01)
+                with col2:
+                    tooltip("Lower alpha = more stringent feature selection. Default is 0.05")
+                
+                if st.button("Apply Boruta", key="apply_boruta"):
+                    try:
+                        with st.spinner(f"Applying Boruta (all-relevant feature selection)... This may take a few minutes."):
+                            result_data = functions.perform_boruta(
+                                st.session_state.data, target_column, categorical_columns, 
+                                max_iter=max_iter, alpha=alpha
+                            )
+                            num_selected = len([col for col in result_data.columns if col != target_column and col not in categorical_columns])
+                            st.session_state.data = result_data
+                        
+                        st.success(f"Boruta applied successfully! Selected {num_selected} relevant features (confirmed + tentative).")
+                        st.info("ℹ️ Boruta selects ALL relevant features, not just a minimal set. This is different from RFE/SelectKBest.")
+                        st.session_state.step4_done = True
+                        
+                        with st.expander("Boruta Results"):
+                            st.dataframe(st.session_state.data, width=700, height=200)
+                    except Exception as e:
+                        st.error(f"Error applying Boruta: {str(e)}")
                         st.error("Please ensure your data contains sufficient numeric features for selection.")
     
     # --- Show data after feature selection/extraction ---

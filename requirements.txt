@@ -16,3 +16,4 @@ fancyimpute>=0.7.0
 statsmodels>=0.13.5
 loguru>=0.7.0
 umap-learn>=0.5.3
+boruta>=0.3

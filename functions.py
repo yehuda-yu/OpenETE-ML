@@ -556,6 +556,52 @@ def perform_select_kbest(data, target_column, categorical_columns, k):
 
     return df_final
 
+def perform_boruta(data, target_column, categorical_columns, max_iter=100, alpha=0.05):
+    """
+    Performs Boruta all-relevant feature selection on the DataFrame.
+    Boruta finds ALL features that are relevant for prediction, not just a minimal set.
+
+    Args:
+        data (pd.DataFrame): The input DataFrame containing features and target.
+        target_column (str): The name of the target column.
+        categorical_columns (list): A list of categorical column names.
+        max_iter (int): Maximum number of iterations (default: 100).
+        alpha (float): Significance level for feature importance (default: 0.05).
+
+    Returns:
+        pd.DataFrame: The DataFrame with the selected features (confirmed and tentative).
+    """
+    from boruta import BorutaPy
+    from sklearn.ensemble import RandomForestRegressor
+    
+    # Separate features and target
+    X = data.drop(columns=[target_column])
+    y = data[target_column]
+
+    # Identify numerical columns
+    numerical_columns = [col for col in X.columns if col not in categorical_columns]
+
+    # Standardize numerical columns
+    scaler = StandardScaler()
+    X_scaled = pd.DataFrame(scaler.fit_transform(X[numerical_columns]), columns=numerical_columns)
+
+    # Initialize Boruta with RandomForest
+    rf = RandomForestRegressor(n_jobs=-1, max_depth=5, random_state=42)
+    boruta_selector = BorutaPy(rf, n_estimators='auto', verbose=0, random_state=42, 
+                               max_iter=max_iter, alpha=alpha)
+
+    # Fit Boruta
+    boruta_selector.fit(X_scaled.values, y.values)
+
+    # Get selected features (confirmed + tentative)
+    selected_mask = boruta_selector.support_ | boruta_selector.support_weak_
+    selected_features = [numerical_columns[i] for i, selected in enumerate(selected_mask) if selected]
+
+    # Create DataFrame with selected features and target
+    df_selected = pd.concat([data[selected_features], data[categorical_columns], y], axis=1)
+
+    return df_selected
+
 @optimized_cache
 def replace_missing_with_average(data):
     """Replace missing values with the average of each column."""
