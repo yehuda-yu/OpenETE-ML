@@ -271,7 +271,6 @@ def perform_umap(data, target_column, categorical_columns, n_components=2, n_nei
     
     return df_final
 
-@optimized_cache
 def perform_rfe(data, target_column, categorical_columns, n_features_to_select):
     """
     Performs Recursive Feature Elimination (RFE) on the numerical columns of a DataFrame.
@@ -357,7 +356,6 @@ def time_series_feature_extraction(data, target_col, categorical_columns):
     
     return pd.concat([parameters_df, categorical_columns_data, pd.Series(target_col_data, name=target_col)], axis=1)
 
-@optimized_cache
 def NDSI_pearson(data,categorical_columns,  target_col):
     '''
     Calculates the Pearson correlation coefficient and p-value
@@ -526,7 +524,6 @@ def calculate_ndsi(data, top_bands_list):
 
     return ndsi_df
 
-@optimized_cache
 def perform_select_kbest(data, target_column, categorical_columns, k):
     """
     Performs SelectKBest feature selection on the DataFrame.
@@ -2092,7 +2089,6 @@ model_functions_dict = {
 }
 
 # Missing Data Handling Functions
-@optimized_cache
 def impute_missing_values(data, method='mean', k=5):
     """
     Impute missing values in a DataFrame using various methods.
@@ -2123,7 +2119,6 @@ def impute_missing_values(data, method='mean', k=5):
         raise ValueError(f"Unknown imputation method: {method}")
 
 # Data Smoothing Functions
-@optimized_cache
 def smooth_data(data, method='moving_average', window_size=3, alpha=0.3):
     """
     Apply smoothing to numerical data.
@@ -2158,7 +2153,6 @@ def smooth_data(data, method='moving_average', window_size=3, alpha=0.3):
     return result
 
 # Outlier Removal Functions
-@optimized_cache
 def remove_outliers_iqr(df, columns, multiplier=1.5):
     """
     Remove outliers using the Interquartile Range (IQR) method on specified columns.
@@ -2187,7 +2181,6 @@ def remove_outliers_iqr(df, columns, multiplier=1.5):
     
     return df_clean
 
-@optimized_cache  
 def remove_outliers_by_threshold(df, column, condition, threshold_value=None, min_threshold=None, max_threshold=None):
     """
     Remove outliers based on threshold conditions for a single column.
