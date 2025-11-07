@@ -309,9 +309,9 @@ st.title("OpenETE-ML End to End ML Regression Model Builder")
 st.header("Step 1: Upload Data")
 col1, col2 = st.columns([10, 1])
 with col1:
-    uploaded_file = st.file_uploader("Upload your data file", type=["csv", "xlsx"])
+    uploaded_file = st.file_uploader("Upload your data file (CSV or XLSX only)", type=["csv", "xlsx"])
 with col2:
-    tooltip("Upload a CSV or Excel file containing your dataset for analysis")
+    tooltip("Upload a CSV or Excel (.xlsx) file containing your dataset for analysis. Old Excel format (.xls) is not supported.")
 
 # This block handles the data loading and state management.
 # It ensures data is loaded only once per file and all subsequent operations
@@ -328,12 +328,28 @@ if uploaded_file is not None:
         
         try:
             # Load data and set initial state
-            data = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+            if uploaded_file.name.endswith('.csv'):
+                data = pd.read_csv(uploaded_file)
+            elif uploaded_file.name.endswith('.xlsx'):
+                data = pd.read_excel(uploaded_file, engine='openpyxl')
+            elif uploaded_file.name.endswith('.xls'):
+                st.error("❌ Old Excel format (.xls) is not supported. Please convert your file to .xlsx or .csv format.")
+                st.info("💡 How to convert:\n"
+                       "1. Open the file in Excel\n"
+                       "2. Go to File → Save As\n"
+                       "3. Choose 'Excel Workbook (.xlsx)' or 'CSV (Comma delimited) (.csv)'\n"
+                       "4. Upload the converted file")
+                st.stop()
+            else:
+                data = pd.read_excel(uploaded_file, engine='openpyxl')
+            
             st.session_state.data = data.copy()
             st.session_state.uploaded_file_name = uploaded_file.name
             st.session_state.step1_done = True
         except Exception as e:
             st.error(f"Error reading file: {e}")
+            if "xlrd" in str(e).lower():
+                st.error("💡 This appears to be an old Excel format (.xls). Please convert it to .xlsx or .csv format and try again.")
             st.stop()
 
     # --- From here, the entire app logic runs using the persistent st.session_state.data ---
