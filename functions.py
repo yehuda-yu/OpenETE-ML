@@ -1689,12 +1689,12 @@ def passive_aggressive_regressor_hyperparam_search(X_train, y_train):
         st.error(f"An error occurred while tuning PassiveAggressiveRegressor model: {e}")
         return None, None
         
-def gradient_boosting_regressor_hyperparam_search(X_train, y_train, scoring='r2'):
+def gradient_boosting_regressor_hyperparam_search(X_train, y_train, scoring='r2', custom_params=None):
     try:
         # Define the model
         gradient_boosting_regressor = GradientBoostingRegressor()
 
-        # Define hyperparameters to tune
+        # Define DEFAULT hyperparameters to tune
         param_dist = {
             "loss": ["ls", "lad", "huber", "quantile"],
             "learning_rate": [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
@@ -1706,7 +1706,7 @@ def gradient_boosting_regressor_hyperparam_search(X_train, y_train, scoring='r2'
             "min_weight_fraction_leaf": uniform(0.0, 0.5),
             "max_depth": [3, 4, 5, 6, 7],
             "min_impurity_decrease": uniform(0.0, 0.5),
-            "max_features": ["auto", "sqrt", "log2"],
+            "max_features": ["sqrt", "log2"],
             "max_leaf_nodes": [None, 10, 20, 30],
             "warm_start": [True, False],
             "validation_fraction": uniform(0.1, 0.3),
@@ -1714,6 +1714,10 @@ def gradient_boosting_regressor_hyperparam_search(X_train, y_train, scoring='r2'
             "tol": uniform(1e-5, 1e-2),
             "random_state": [42],
         }
+        
+        # Override with custom params if provided
+        if custom_params:
+            param_dist.update(custom_params)
 
         # Perform RandomizedSearchCV with custom scoring metric
         random_search = RandomizedSearchCV(gradient_boosting_regressor, param_distributions=param_dist, n_iter=50, cv=5, scoring=scoring, random_state=42)
@@ -1770,12 +1774,12 @@ def tune_sgd_regressor(X_train, y_train):
         return None, None
     
 
-def tune_rf_regressor(X_train, y_train, scoring='r2'):
+def tune_rf_regressor(X_train, y_train, scoring='r2', custom_params=None):
     try:
         # Define the model
         rf_regressor = RandomForestRegressor()
 
-        # Define hyperparameters to tune
+        # Define DEFAULT hyperparameters to tune
         param_dist = {
             "n_estimators": [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)],
             "criterion": ['squared_error', 'poisson', 'absolute_error', 'friedman_mse'],
@@ -1783,13 +1787,17 @@ def tune_rf_regressor(X_train, y_train, scoring='r2'):
             "min_samples_split": [2, 5, 10],
             "min_samples_leaf": [1, 2, 4],
             "min_weight_fraction_leaf": uniform(0.0, 0.5),
-            "max_features": ["auto", "sqrt", "log2"],
+            "max_features": ["sqrt", "log2"],
             "max_leaf_nodes": [None, 10, 20, 30],
             "min_impurity_decrease": uniform(0.0, 0.5),
             "bootstrap": [True, False],
             "oob_score": [True, False],
             "warm_start": [True],
         }
+        
+        # Override with custom params if provided
+        if custom_params:
+            param_dist.update(custom_params)
 
         # Perform RandomizedSearchCV with custom scoring metric
         random_search = RandomizedSearchCV(rf_regressor, param_distributions=param_dist, n_iter=50, cv=5, scoring=scoring, random_state=42)
@@ -1873,13 +1881,13 @@ def tune_bagging_regressor(X_train, y_train):
         st.error(f"An error occurred while tuning BaggingRegressor model: {e}")
         return None, None
         
-def tune_lgbm_regressor(X_train, y_train, scoring='r2'):
+def tune_lgbm_regressor(X_train, y_train, scoring='r2', custom_params=None):
     try:
         
         # Define the model
         lgbm_regressor = LGBMRegressor()
         
-        # Define hyperparameters to tune
+        # Define DEFAULT hyperparameters to tune
         param_dist = {
             'boosting_type': ['gbdt', 'dart', 'rf'],
             'num_leaves': randint(10, 200),
@@ -1898,6 +1906,10 @@ def tune_lgbm_regressor(X_train, y_train, scoring='r2'):
             'random_state': randint(1, 1000)
         }
         
+        # Override with custom params if provided
+        if custom_params:
+            param_dist.update(custom_params)
+        
         # Perform RandomizedSearchCV with custom scoring metric
         random_search = RandomizedSearchCV(lgbm_regressor, param_distributions=param_dist,
                                         n_iter=100, cv=5, scoring=scoring, random_state=42, n_jobs=-1)
@@ -1914,10 +1926,10 @@ def tune_lgbm_regressor(X_train, y_train, scoring='r2'):
         return None, None
         
 
-def tune_xgb_regressor(X_train, y_train, scoring='r2'):
+def tune_xgb_regressor(X_train, y_train, scoring='r2', custom_params=None):
     try:
 
-        # Define the parameter grid for the search
+        # Define DEFAULT parameter grid for the search
         param_grid = {
             'max_depth': [4, 5, 6, 7, 8],
             'learning_rate': [0.1, 0.01, 0.001],
@@ -1928,6 +1940,10 @@ def tune_xgb_regressor(X_train, y_train, scoring='r2'):
             'reg_lambda': [i/10 for i in range(1, 10)],
             'min_child_weight': [i for i in range(2, 8)]
         }
+        
+        # Override with custom params if provided
+        if custom_params:
+            param_grid.update(custom_params)
         
         # Initialize the XGBoost model
         xgb_model = xgb.XGBRegressor()

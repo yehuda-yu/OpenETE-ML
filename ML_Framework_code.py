@@ -1525,6 +1525,239 @@ if uploaded_file is not None:
 
             # Show educational info for the selected model
             show_method_info(best_model, show_educational_info)
+            
+            # Advanced hyperparameter customization for top models
+            if best_model in ["RandomForestRegressor", "XGBRegressor", "LGBMRegressor", "GradientBoostingRegressor"]:
+                with st.expander("🔧 Advanced: Customize Hyperparameter Ranges (Optional)", expanded=False):
+                    st.info("💡 Customize the search space for hyperparameter tuning. Leave as default if unsure.")
+                    
+                    if best_model == "RandomForestRegressor":
+                        st.write("**Random Forest Hyperparameters**")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("*Number of Trees*")
+                            n_estimators_min = st.number_input("Min n_estimators", value=200, min_value=10, max_value=5000, step=50)
+                            n_estimators_max = st.number_input("Max n_estimators", value=2000, min_value=10, max_value=5000, step=50)
+                            
+                            st.write("*Tree Depth*")
+                            max_depth_options = st.multiselect(
+                                "max_depth options",
+                                options=[5, 10, 20, 30, 40, 50, None],
+                                default=[10, 20, 30, 40, 50],
+                                help="Maximum depth of trees. None = unlimited"
+                            )
+                            
+                            st.write("*Sample Splitting*")
+                            min_samples_split = st.multiselect(
+                                "min_samples_split",
+                                options=[2, 5, 10, 15, 20],
+                                default=[2, 5, 10],
+                                help="Minimum samples required to split a node"
+                            )
+                        
+                        with col2:
+                            st.write("*Leaf Samples*")
+                            min_samples_leaf = st.multiselect(
+                                "min_samples_leaf",
+                                options=[1, 2, 4, 8, 16],
+                                default=[1, 2, 4],
+                                help="Minimum samples required at a leaf node"
+                            )
+                            
+                            st.write("*Features*")
+                            max_features_options = st.multiselect(
+                                "max_features",
+                                options=["sqrt", "log2"],
+                                default=["sqrt", "log2"],
+                                help="Number of features to consider for best split"
+                            )
+                            
+                            st.write("*Bootstrap*")
+                            bootstrap_options = st.multiselect(
+                                "bootstrap",
+                                options=[True, False],
+                                default=[True, False],
+                                help="Whether to use bootstrap samples"
+                            )
+                        
+                        # Store custom params
+                        if 'custom_rf_params' not in st.session_state:
+                            st.session_state.custom_rf_params = {}
+                        
+                        st.session_state.custom_rf_params = {
+                            "n_estimators": [int(x) for x in np.linspace(n_estimators_min, n_estimators_max, 10)],
+                            "max_depth": max_depth_options if max_depth_options else [10, 20, 30, 40, 50],
+                            "min_samples_split": min_samples_split if min_samples_split else [2, 5, 10],
+                            "min_samples_leaf": min_samples_leaf if min_samples_leaf else [1, 2, 4],
+                            "max_features": max_features_options if max_features_options else ["sqrt", "log2"],
+                            "bootstrap": bootstrap_options if bootstrap_options else [True, False]
+                        }
+                        
+                    elif best_model == "XGBRegressor":
+                        st.write("**XGBoost Hyperparameters**")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("*Learning Rate*")
+                            learning_rates = st.multiselect(
+                                "learning_rate",
+                                options=[0.001, 0.01, 0.05, 0.1, 0.2, 0.3],
+                                default=[0.01, 0.1, 0.001],
+                                help="Step size shrinkage to prevent overfitting"
+                            )
+                            
+                            st.write("*Tree Depth*")
+                            max_depth_xgb = st.multiselect(
+                                "max_depth",
+                                options=[3, 4, 5, 6, 7, 8, 9, 10],
+                                default=[4, 5, 6, 7, 8],
+                                help="Maximum depth of trees"
+                            )
+                            
+                            st.write("*Number of Trees*")
+                            n_estimators_min_xgb = st.number_input("Min n_estimators", value=100, min_value=50, max_value=2000, step=50, key="xgb_min")
+                            n_estimators_max_xgb = st.number_input("Max n_estimators", value=1400, min_value=50, max_value=2000, step=50, key="xgb_max")
+                        
+                        with col2:
+                            st.write("*Regularization (L1)*")
+                            reg_alpha_min = st.slider("Min reg_alpha", 0.0, 2.0, 0.1, 0.1, key="xgb_alpha_min")
+                            reg_alpha_max = st.slider("Max reg_alpha", 0.0, 2.0, 0.9, 0.1, key="xgb_alpha_max")
+                            
+                            st.write("*Regularization (L2)*")
+                            reg_lambda_min = st.slider("Min reg_lambda", 0.0, 2.0, 0.1, 0.1, key="xgb_lambda_min")
+                            reg_lambda_max = st.slider("Max reg_lambda", 0.0, 2.0, 0.9, 0.1, key="xgb_lambda_max")
+                            
+                            st.write("*Subsampling*")
+                            subsample_min = st.slider("Min subsample", 0.1, 1.0, 0.1, 0.1, key="xgb_subsample_min")
+                            subsample_max = st.slider("Max subsample", 0.1, 1.0, 0.9, 0.1, key="xgb_subsample_max")
+                        
+                        st.session_state.custom_xgb_params = {
+                            "learning_rate": learning_rates if learning_rates else [0.1, 0.01, 0.001],
+                            "max_depth": max_depth_xgb if max_depth_xgb else [4, 5, 6, 7, 8],
+                            "n_estimators": [i for i in range(n_estimators_min_xgb, n_estimators_max_xgb, 150)],
+                            "reg_alpha": [i/10 for i in range(int(reg_alpha_min*10), int(reg_alpha_max*10)+1)],
+                            "reg_lambda": [i/10 for i in range(int(reg_lambda_min*10), int(reg_lambda_max*10)+1)],
+                            "subsample": [i/10 for i in range(int(subsample_min*10), int(subsample_max*10)+1)]
+                        }
+                        
+                    elif best_model == "LGBMRegressor":
+                        st.write("**LightGBM Hyperparameters**")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("*Learning Rate*")
+                            lgbm_learning_rates = st.multiselect(
+                                "learning_rate",
+                                options=[0.001, 0.01, 0.05, 0.1, 0.2, 0.3],
+                                default=[0.01, 0.05, 0.1, 0.2, 0.3],
+                                help="Step size for gradient descent",
+                                key="lgbm_lr"
+                            )
+                            
+                            st.write("*Number of Leaves*")
+                            num_leaves_min = st.number_input("Min num_leaves", value=10, min_value=5, max_value=300, step=5, key="lgbm_leaves_min")
+                            num_leaves_max = st.number_input("Max num_leaves", value=200, min_value=5, max_value=300, step=5, key="lgbm_leaves_max")
+                            
+                            st.write("*Tree Depth*")
+                            lgbm_max_depth_min = st.number_input("Min max_depth (-1=unlimited)", value=-1, min_value=-1, max_value=30, step=1, key="lgbm_depth_min")
+                            lgbm_max_depth_max = st.number_input("Max max_depth", value=20, min_value=-1, max_value=30, step=1, key="lgbm_depth_max")
+                        
+                        with col2:
+                            st.write("*Number of Trees*")
+                            lgbm_n_estimators_min = st.number_input("Min n_estimators", value=100, min_value=50, max_value=1500, step=50, key="lgbm_n_min")
+                            lgbm_n_estimators_max = st.number_input("Max n_estimators", value=1000, min_value=50, max_value=1500, step=50, key="lgbm_n_max")
+                            
+                            st.write("*Regularization*")
+                            lgbm_reg_alpha_max = st.slider("Max reg_alpha", 0.0, 2.0, 1.0, 0.1, key="lgbm_alpha")
+                            lgbm_reg_lambda_max = st.slider("Max reg_lambda", 0.0, 2.0, 1.0, 0.1, key="lgbm_lambda")
+                            
+                            st.write("*Subsampling*")
+                            lgbm_subsample_min = st.slider("Min subsample", 0.5, 1.0, 0.5, 0.05, key="lgbm_subsample_min")
+                            lgbm_subsample_max = st.slider("Max subsample", 0.5, 1.0, 1.0, 0.05, key="lgbm_subsample_max")
+                        
+                        from scipy.stats import randint, uniform
+                        st.session_state.custom_lgbm_params = {
+                            "learning_rate": lgbm_learning_rates if lgbm_learning_rates else [0.01, 0.05, 0.1, 0.2, 0.3],
+                            "num_leaves": randint(num_leaves_min, num_leaves_max),
+                            "max_depth": randint(lgbm_max_depth_min, lgbm_max_depth_max),
+                            "n_estimators": randint(lgbm_n_estimators_min, lgbm_n_estimators_max),
+                            "reg_alpha": uniform(0, lgbm_reg_alpha_max),
+                            "reg_lambda": uniform(0, lgbm_reg_lambda_max),
+                            "subsample": uniform(lgbm_subsample_min, lgbm_subsample_max)
+                        }
+                        
+                    elif best_model == "GradientBoostingRegressor":
+                        st.write("**Gradient Boosting Hyperparameters**")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("*Learning Rate*")
+                            gb_learning_rates = st.multiselect(
+                                "learning_rate",
+                                options=[0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5],
+                                default=[0.01, 0.1, 0.2, 0.3],
+                                help="Step size shrinkage",
+                                key="gb_lr"
+                            )
+                            
+                            st.write("*Number of Trees*")
+                            gb_n_estimators_min = st.number_input("Min n_estimators", value=100, min_value=50, max_value=1500, step=50, key="gb_n_min")
+                            gb_n_estimators_max = st.number_input("Max n_estimators", value=1000, min_value=50, max_value=1500, step=50, key="gb_n_max")
+                            
+                            st.write("*Tree Depth*")
+                            gb_max_depth = st.multiselect(
+                                "max_depth",
+                                options=[2, 3, 4, 5, 6, 7, 8],
+                                default=[3, 4, 5, 6, 7],
+                                help="Maximum depth of trees",
+                                key="gb_depth"
+                            )
+                        
+                        with col2:
+                            st.write("*Sample Splitting*")
+                            gb_min_samples_split = st.multiselect(
+                                "min_samples_split",
+                                options=[2, 5, 10, 15],
+                                default=[2, 5, 10],
+                                help="Minimum samples to split node",
+                                key="gb_split"
+                            )
+                            
+                            st.write("*Leaf Samples*")
+                            gb_min_samples_leaf = st.multiselect(
+                                "min_samples_leaf",
+                                options=[1, 2, 4, 8],
+                                default=[1, 2, 4],
+                                help="Minimum samples at leaf",
+                                key="gb_leaf"
+                            )
+                            
+                            st.write("*Subsampling*")
+                            gb_subsample_min = st.slider("Min subsample", 0.1, 1.0, 0.1, 0.1, key="gb_subsample_min")
+                            gb_subsample_max = st.slider("Max subsample", 0.1, 1.0, 1.0, 0.1, key="gb_subsample_max")
+                        
+                        from scipy.stats import uniform
+                        st.session_state.custom_gb_params = {
+                            "learning_rate": gb_learning_rates if gb_learning_rates else [0.01, 0.1, 0.2, 0.3],
+                            "n_estimators": [i for i in range(gb_n_estimators_min, gb_n_estimators_max, 100)],
+                            "max_depth": gb_max_depth if gb_max_depth else [3, 4, 5, 6, 7],
+                            "min_samples_split": gb_min_samples_split if gb_min_samples_split else [2, 5, 10],
+                            "min_samples_leaf": gb_min_samples_leaf if gb_min_samples_leaf else [1, 2, 4],
+                            "subsample": uniform(gb_subsample_min, gb_subsample_max)
+                        }
+                    
+                    st.success("✓ Custom hyperparameter ranges configured")
+            else:
+                # Clear any custom params for other models
+                if 'custom_rf_params' in st.session_state:
+                    del st.session_state.custom_rf_params
+                if 'custom_xgb_params' in st.session_state:
+                    del st.session_state.custom_xgb_params
+                if 'custom_lgbm_params' in st.session_state:
+                    del st.session_state.custom_lgbm_params
+                if 'custom_gb_params' in st.session_state:
+                    del st.session_state.custom_gb_params
 
             if best_model != st.session_state.best_model:
                 st.session_state.best_model = best_model
@@ -1537,13 +1770,28 @@ if uploaded_file is not None:
                         # Get scoring metric from session state
                         scoring = st.session_state.get('tuning_scoring', 'r2')
                         
-                        # Call tuning function with scoring parameter
-                        # Try with scoring first; if not supported, fallback to default
+                        # Get custom parameters if they exist
+                        custom_params = None
+                        if best_model == "RandomForestRegressor":
+                            custom_params = st.session_state.get('custom_rf_params', None)
+                        elif best_model == "XGBRegressor":
+                            custom_params = st.session_state.get('custom_xgb_params', None)
+                        elif best_model == "LGBMRegressor":
+                            custom_params = st.session_state.get('custom_lgbm_params', None)
+                        elif best_model == "GradientBoostingRegressor":
+                            custom_params = st.session_state.get('custom_gb_params', None)
+                        
+                        # Call tuning function with scoring and custom_params
+                        # Try with both parameters first; if not supported, fallback
                         try:
-                            best_estimator, best_params = tuning_function(X_train, y_train, scoring=scoring)
+                            best_estimator, best_params = tuning_function(X_train, y_train, scoring=scoring, custom_params=custom_params)
                         except TypeError:
-                            # Function doesn't accept scoring parameter yet, use default
-                            best_estimator, best_params = tuning_function(X_train, y_train)
+                            # Function doesn't accept custom_params, try just scoring
+                            try:
+                                best_estimator, best_params = tuning_function(X_train, y_train, scoring=scoring)
+                            except TypeError:
+                                # Function doesn't accept scoring either, use default
+                                best_estimator, best_params = tuning_function(X_train, y_train)
                         
                         tuning_time = time.time() - tuning_start_time
                     
