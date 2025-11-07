@@ -309,7 +309,7 @@ def perform_rfe(data, target_column, categorical_columns, n_features_to_select):
     # Create DataFrame with selected features and target
     df_selected = pd.concat([data[selected_features], y], axis=1)
     
-    return df_selected, selected_features
+    return df_selected
 
 @optimized_cache
 def time_series_feature_extraction(data, target_col, categorical_columns):
