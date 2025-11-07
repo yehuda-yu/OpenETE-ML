@@ -1226,7 +1226,7 @@ def huber_regressor_hyperparam_search(X_train, y_train):
         return None, None
         
 
-def svr_hyperparam_search(X_train, y_train):
+def svr_hyperparam_search(X_train, y_train, scoring='r2'):
     try:
         # Define the model
         svr = NuSVR()
@@ -1244,8 +1244,8 @@ def svr_hyperparam_search(X_train, y_train):
             "cache_size": [100, 200, 300],  # Size of the kernel cache
         }
 
-        # Perform RandomizedSearchCV
-        random_search = RandomizedSearchCV(svr, param_distributions=param_dist, n_iter=50, cv=5, random_state=42)
+        # Perform RandomizedSearchCV with custom scoring metric
+        random_search = RandomizedSearchCV(svr, param_distributions=param_dist, n_iter=50, cv=5, scoring=scoring, random_state=42)
         random_search.fit(X_train, y_train)
 
         # Best parameters and best score
@@ -1689,7 +1689,7 @@ def passive_aggressive_regressor_hyperparam_search(X_train, y_train):
         st.error(f"An error occurred while tuning PassiveAggressiveRegressor model: {e}")
         return None, None
         
-def gradient_boosting_regressor_hyperparam_search(X_train, y_train):
+def gradient_boosting_regressor_hyperparam_search(X_train, y_train, scoring='r2'):
     try:
         # Define the model
         gradient_boosting_regressor = GradientBoostingRegressor()
@@ -1715,8 +1715,8 @@ def gradient_boosting_regressor_hyperparam_search(X_train, y_train):
             "random_state": [42],
         }
 
-        # Perform RandomizedSearchCV
-        random_search = RandomizedSearchCV(gradient_boosting_regressor, param_distributions=param_dist, n_iter=50, cv=5, random_state=42)
+        # Perform RandomizedSearchCV with custom scoring metric
+        random_search = RandomizedSearchCV(gradient_boosting_regressor, param_distributions=param_dist, n_iter=50, cv=5, scoring=scoring, random_state=42)
         random_search.fit(X_train, y_train)
 
         # Best parameters and best score
@@ -1770,7 +1770,7 @@ def tune_sgd_regressor(X_train, y_train):
         return None, None
     
 
-def tune_rf_regressor(X_train, y_train):
+def tune_rf_regressor(X_train, y_train, scoring='r2'):
     try:
         # Define the model
         rf_regressor = RandomForestRegressor()
@@ -1791,8 +1791,8 @@ def tune_rf_regressor(X_train, y_train):
             "warm_start": [True],
         }
 
-        # Perform RandomizedSearchCV
-        random_search = RandomizedSearchCV(rf_regressor, param_distributions=param_dist, n_iter=50, cv=5, random_state=42)
+        # Perform RandomizedSearchCV with custom scoring metric
+        random_search = RandomizedSearchCV(rf_regressor, param_distributions=param_dist, n_iter=50, cv=5, scoring=scoring, random_state=42)
         random_search.fit(X_train, y_train)
 
         # Best parameters and best score
@@ -1805,7 +1805,7 @@ def tune_rf_regressor(X_train, y_train):
         st.error(f"An error occurred while tuning RandomForestRegressor model: {e}")
         return None, None
         
-def tune_hist_gradient_boosting_regressor(X_train, y_train):
+def tune_hist_gradient_boosting_regressor(X_train, y_train, scoring='r2'):
     try:
         # Define the model
         hist_gbr = HistGradientBoostingRegressor()
@@ -1828,8 +1828,8 @@ def tune_hist_gradient_boosting_regressor(X_train, y_train):
             'tol': [1e-8, 1e-7, 1e-6, 1e-5],
         }
 
-        # Perform RandomizedSearchCV
-        random_search = RandomizedSearchCV(hist_gbr, param_distributions=param_dist, n_iter=50, cv=5, random_state=42)
+        # Perform RandomizedSearchCV with custom scoring metric
+        random_search = RandomizedSearchCV(hist_gbr, param_distributions=param_dist, n_iter=50, cv=5, scoring=scoring, random_state=42)
         random_search.fit(X_train, y_train)
 
         # Best parameters and best score
@@ -1873,7 +1873,7 @@ def tune_bagging_regressor(X_train, y_train):
         st.error(f"An error occurred while tuning BaggingRegressor model: {e}")
         return None, None
         
-def tune_lgbm_regressor(X_train, y_train):
+def tune_lgbm_regressor(X_train, y_train, scoring='r2'):
     try:
         
         # Define the model
@@ -1898,9 +1898,9 @@ def tune_lgbm_regressor(X_train, y_train):
             'random_state': randint(1, 1000)
         }
         
-        # Perform RandomizedSearchCV
+        # Perform RandomizedSearchCV with custom scoring metric
         random_search = RandomizedSearchCV(lgbm_regressor, param_distributions=param_dist,
-                                        n_iter=100, cv=5, random_state=42, n_jobs=-1)
+                                        n_iter=100, cv=5, scoring=scoring, random_state=42, n_jobs=-1)
         random_search.fit(X_train, y_train)
         
         # Best parameters and best score
@@ -1914,7 +1914,7 @@ def tune_lgbm_regressor(X_train, y_train):
         return None, None
         
 
-def tune_xgb_regressor(X_train, y_train):
+def tune_xgb_regressor(X_train, y_train, scoring='r2'):
     try:
 
         # Define the parameter grid for the search
@@ -1932,8 +1932,8 @@ def tune_xgb_regressor(X_train, y_train):
         # Initialize the XGBoost model
         xgb_model = xgb.XGBRegressor()
         
-        # Perform the randomized search with cross-validation
-        search = RandomizedSearchCV(xgb_model, param_grid, cv=3, n_iter=10, random_state=42)
+        # Perform the randomized search with cross-validation using custom scoring metric
+        search = RandomizedSearchCV(xgb_model, param_grid, cv=3, n_iter=10, scoring=scoring, random_state=42)
         search.fit(X_train, y_train)
         
         # Get the best model, parameters, and score

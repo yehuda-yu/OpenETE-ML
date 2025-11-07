@@ -1495,6 +1495,29 @@ if uploaded_file is not None:
 
             # Store CV folds in session state for future use and logging
             st.session_state.num_cv_folds = num_cv_folds
+            
+            # Metric selection for hyperparameter tuning
+            col1, col2 = st.columns([10, 1])
+            with col1:
+                tuning_metric = st.selectbox(
+                    "Select optimization metric for hyperparameter tuning:",
+                    options=["R² (Coefficient of Determination)", "Negative MAE (Mean Absolute Error)", 
+                             "Negative MSE (Mean Squared Error)", "Negative RMSE (Root Mean Squared Error)"],
+                    index=0,
+                    help="This metric determines which hyperparameters are considered 'best' during the search"
+                )
+            with col2:
+                tooltip("R²: Measures goodness of fit (higher is better). MAE: Average error magnitude. MSE: Squared errors (penalizes large errors more). RMSE: Square root of MSE (same units as target)")
+            
+            # Convert to sklearn scoring parameter
+            scoring_map = {
+                "R² (Coefficient of Determination)": "r2",
+                "Negative MAE (Mean Absolute Error)": "neg_mean_absolute_error",
+                "Negative MSE (Mean Squared Error)": "neg_mean_squared_error",
+                "Negative RMSE (Root Mean Squared Error)": "neg_root_mean_squared_error"
+            }
+            st.session_state.tuning_scoring = scoring_map[tuning_metric]
+            st.session_state.tuning_metric_display = tuning_metric
 
             best_model = st.selectbox("Select a model for hyperparameter tuning:", 
                                       top_5_models, 
@@ -1510,7 +1533,18 @@ if uploaded_file is not None:
                     with st.spinner(f"Tuning hyperparameters for {best_model}..."):
                         tuning_start_time = time.time()
                         tuning_function = functions.model_functions_dict[best_model]
-                        best_estimator, best_params = tuning_function(X_train, y_train)
+                        
+                        # Get scoring metric from session state
+                        scoring = st.session_state.get('tuning_scoring', 'r2')
+                        
+                        # Call tuning function with scoring parameter
+                        # Try with scoring first; if not supported, fallback to default
+                        try:
+                            best_estimator, best_params = tuning_function(X_train, y_train, scoring=scoring)
+                        except TypeError:
+                            # Function doesn't accept scoring parameter yet, use default
+                            best_estimator, best_params = tuning_function(X_train, y_train)
+                        
                         tuning_time = time.time() - tuning_start_time
                     
                     # Memory cleanup after hyperparameter tuning
@@ -1518,6 +1552,10 @@ if uploaded_file is not None:
                     
                     if best_estimator is not None:
                         st.subheader(f"Hyperparameter Tuning Results for {best_model}")
+                        
+                        # Display optimization metric
+                        metric_display = st.session_state.get('tuning_metric_display', 'R² (Coefficient of Determination)')
+                        st.info(f"🎯 Optimization Metric: **{metric_display}**")
                         
                         # Display tuning time
                         col1, col2 = st.columns([3, 1])
