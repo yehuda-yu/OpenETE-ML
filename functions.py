@@ -27,6 +27,7 @@ from sklearn.ensemble import ExtraTreesRegressor, AdaBoostRegressor, GradientBoo
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.kernel_ridge import KernelRidge
 import lightgbm as lgb
+from lightgbm import LGBMRegressor
 import xgboost as xgb
 from scipy.stats import uniform, randint
 from scipy.stats import loguniform
@@ -626,14 +627,14 @@ def normalize_data_minmax(data):
     """Normalize data using Min-Max scaling."""
     scaler = MinMaxScaler()
     normalized_data = scaler.fit_transform(data)
-    return pd.DataFrame(normalized_data, columns=data.columns)
+    return pd.DataFrame(normalized_data, columns=data.columns, index=data.index)
 
 @optimized_cache
 def normalize_data_standard(data):
     """Standardize data using Z-score standardization."""
     scaler = StandardScaler()
     standardized_data = scaler.fit_transform(data)
-    return pd.DataFrame(standardized_data, columns=data.columns)
+    return pd.DataFrame(standardized_data, columns=data.columns, index=data.index)
 
 @optimized_cache
 def encode_categorical_onehot(data):
@@ -2176,7 +2177,8 @@ def impute_missing_values(data, method='mean', k=5):
     elif method == 'knn':
         from sklearn.impute import KNNImputer
         imputer = KNNImputer(n_neighbors=k)
-        return pd.DataFrame(imputer.fit_transform(data), columns=data.columns)
+        # Preserve index and columns
+        return pd.DataFrame(imputer.fit_transform(data), columns=data.columns, index=data.index)
     elif method == 'drop_rows':
         return data.dropna()
     elif method == 'drop_cols':
