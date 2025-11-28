@@ -80,7 +80,7 @@ def perform_pca(data, target_column, categorical_columns, variance_percentage):
     # Create DataFrame with principal components
     n_components = pca.n_components_
     pc_col_names = [f"PC_{i+1}" for i in range(n_components)]
-    df_pca = pd.DataFrame(data=X_pca, columns=pc_col_names)
+    df_pca = pd.DataFrame(data=X_pca, columns=pc_col_names, index=data.index)
 
     # Calculate the cumulative percentage of explained variance
     cum_var = np.cumsum(pca.explained_variance_ratio_)
@@ -184,14 +184,15 @@ def perform_tsne(data, target_column, categorical_columns, n_components=2):
     tsne = TSNE(n_components=n_components, random_state=42)
     X_tsne = tsne.fit_transform(X_scaled)
     
-    df_tsne = pd.DataFrame(X_tsne, columns=[f"tSNE_{i+1}" for i in range(n_components)])
+    df_tsne = pd.DataFrame(X_tsne, columns=[f"tSNE_{i+1}" for i in range(n_components)], index=data.index)
     df_final = pd.concat([df_tsne, data[categorical_columns], y], axis=1)
     
     if n_components == 2:
         fig, ax = plt.subplots(figsize=(10, 8))
         scatter = ax.scatter(df_tsne['tSNE_1'], df_tsne['tSNE_2'], c=y, cmap='viridis', alpha=0.7)
-        plt.colorbar(scatter)
-        plt.title('t-SNE Visualization (2D)')
+        cbar = plt.colorbar(scatter)
+        cbar.set_label(f'Target Value ({target_column})')
+        plt.title(f't-SNE Visualization (Color = {target_column})')
         plt.xlabel('t-SNE 1')
         plt.ylabel('t-SNE 2')
         st.pyplot(fig)
@@ -199,8 +200,9 @@ def perform_tsne(data, target_column, categorical_columns, n_components=2):
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')
         scatter = ax.scatter(df_tsne['tSNE_1'], df_tsne['tSNE_2'], df_tsne['tSNE_3'], c=y, cmap='viridis', alpha=0.7)
-        plt.colorbar(scatter)
-        ax.set_title('t-SNE Visualization (3D)')
+        cbar = plt.colorbar(scatter)
+        cbar.set_label(f'Target Value ({target_column})')
+        ax.set_title(f't-SNE Visualization (Color = {target_column})')
         ax.set_xlabel('t-SNE 1')
         ax.set_ylabel('t-SNE 2')
         ax.set_zlabel('t-SNE 3')
@@ -242,14 +244,15 @@ def perform_umap(data, target_column, categorical_columns, n_components=2, n_nei
                            min_dist=min_dist, metric=metric, random_state=42)
     X_umap = umap_model.fit_transform(X_scaled)
     
-    df_umap = pd.DataFrame(X_umap, columns=[f"UMAP_{i+1}" for i in range(n_components)])
+    df_umap = pd.DataFrame(X_umap, columns=[f"UMAP_{i+1}" for i in range(n_components)], index=data.index)
     df_final = pd.concat([df_umap, data[categorical_columns], y], axis=1)
     
     if n_components == 2:
         fig, ax = plt.subplots(figsize=(10, 8))
         scatter = ax.scatter(df_umap['UMAP_1'], df_umap['UMAP_2'], c=y, cmap='viridis', alpha=0.7)
-        plt.colorbar(scatter)
-        plt.title('UMAP Visualization (2D)')
+        cbar = plt.colorbar(scatter)
+        cbar.set_label(f'Target Value ({target_column})')
+        plt.title(f'UMAP Visualization (Color = {target_column})')
         plt.xlabel('UMAP 1')
         plt.ylabel('UMAP 2')
         st.pyplot(fig)
@@ -257,8 +260,9 @@ def perform_umap(data, target_column, categorical_columns, n_components=2, n_nei
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')
         scatter = ax.scatter(df_umap['UMAP_1'], df_umap['UMAP_2'], df_umap['UMAP_3'], c=y, cmap='viridis', alpha=0.7)
-        plt.colorbar(scatter)
-        ax.set_title('UMAP Visualization (3D)')
+        cbar = plt.colorbar(scatter)
+        cbar.set_label(f'Target Value ({target_column})')
+        ax.set_title(f'UMAP Visualization (Color = {target_column})')
         ax.set_xlabel('UMAP 1')
         ax.set_ylabel('UMAP 2')
         ax.set_zlabel('UMAP 3')
@@ -549,7 +553,7 @@ def perform_select_kbest(data, target_column, categorical_columns, k):
     X_new = selector.fit_transform(X[numerical_columns], y)
 
     # Create a DataFrame with the selected features
-    df_selected = pd.DataFrame(X_new, columns=[numerical_columns[i] for i in selector.get_support(indices=True)])
+    df_selected = pd.DataFrame(X_new, columns=[numerical_columns[i] for i in selector.get_support(indices=True)], index=data.index)
 
     # Add back the target column and categorical columns
     df_final = pd.concat([df_selected, data[categorical_columns], y], axis=1)

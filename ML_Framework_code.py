@@ -1236,6 +1236,11 @@ if uploaded_file is not None:
                                 
                                 st.success(f"✅ NDSI selection applied successfully! Dataset now has {len(st.session_state.data.columns)} columns.")
                                 st.success(f"🎯 Features updated: {len(new_feature_cols)} NDSI features selected. You can now proceed directly to model training!")
+                                
+                                # Clear previous model training state to force retraining with new features
+                                st.session_state.state = {}
+                                st.session_state.models_evaluated = False
+                                
                                 st.session_state.step4_done = True
                                 
                                 with st.expander("📊 NDSI Results"):
@@ -1285,6 +1290,11 @@ if uploaded_file is not None:
                                 )
                         
                         st.success(f"{selection_method} applied successfully! Selected {num_features} features.")
+                        
+                        # Clear previous model training state to force retraining with new features
+                        st.session_state.state = {}
+                        st.session_state.models_evaluated = False
+                        
                         st.session_state.step4_done = True
                         
                         with st.expander(f"{selection_method} Results"):
@@ -1318,6 +1328,11 @@ if uploaded_file is not None:
                         
                         st.success(f"Boruta applied successfully! Selected {num_selected} relevant features (confirmed + tentative).")
                         st.info("ℹ️ Boruta selects ALL relevant features, not just a minimal set. This is different from RFE/SelectKBest.")
+                        
+                        # Clear previous model training state to force retraining with new features
+                        st.session_state.state = {}
+                        st.session_state.models_evaluated = False
+                        
                         st.session_state.step4_done = True
                         
                         with st.expander("Boruta Results"):
@@ -1346,6 +1361,11 @@ if uploaded_file is not None:
             st.session_state.step4_done = True
         st.session_state.step5_done = True
         try:
+            # Verify target column exists
+            if target_column not in st.session_state.data.columns:
+                st.error(f"Target column '{target_column}' not found in data. Please re-select the target column in Step 3.")
+                st.stop()
+
             # Separate target column to prevent it from being dropped
             target = st.session_state.data[target_column]
             data = st.session_state.data.drop(columns=[target_column])
@@ -1759,7 +1779,12 @@ if uploaded_file is not None:
                 if 'custom_gb_params' in st.session_state:
                     del st.session_state.custom_gb_params
 
-            if best_model != st.session_state.best_model:
+            # Check if we should tune: ONLY explicit button click
+            tune_clicked = st.button(f"⚡ Retrain & Tune {best_model}", help="Click to retrain the model with the selected hyperparameters")
+            
+            should_tune = tune_clicked
+
+            if should_tune:
                 st.session_state.best_model = best_model
                 
                 if best_model in functions.model_functions_dict:
@@ -1841,211 +1866,216 @@ if uploaded_file is not None:
 
                 st.session_state.model_obj = model_obj
 
-            model_obj = st.session_state.model_obj
-            y_pred = model_obj.predict(X_test)
+
+            # Only display results if the selected model matches the tuned model
+            if st.session_state.get('best_model') == best_model:
+                model_obj = st.session_state.model_obj
+                y_pred = model_obj.predict(X_test)
             
-            # Model evaluation
-            mae = mean_absolute_error(y_test, y_pred)
-            mse = mean_squared_error(y_test, y_pred)
-            rmse = np.sqrt(mse)
-            r2 = r2_score(y_test, y_pred)
+                # Model evaluation
+                mae = mean_absolute_error(y_test, y_pred)
+                mse = mean_squared_error(y_test, y_pred)
+                rmse = np.sqrt(mse)
+                r2 = r2_score(y_test, y_pred)
             
-            # Log model performance
-            iteration_data = {
-                **preprocessing_choices,
-                "model_name": best_model,
-                "metrics": {
-                    "mae": mae,
-                    "mse": mse,
-                    "rmse": rmse,
-                    "r2": r2
-                },
-                "split_percentage": split_percentage,
-                "cv_folds": st.session_state.get('num_cv_folds', 5),  # Default to 5 if not set
-                "tuning_time_seconds": st.session_state.get('tuning_time', None)
-            }
-            st.session_state.model_logger.log_iteration(iteration_data)
+                # Log model performance
+                iteration_data = {
+                    **preprocessing_choices,
+                    "model_name": best_model,
+                    "metrics": {
+                        "mae": mae,
+                        "mse": mse,
+                        "rmse": rmse,
+                        "r2": r2
+                    },
+                    "split_percentage": split_percentage,
+                    "cv_folds": st.session_state.get('num_cv_folds', 5),  # Default to 5 if not set
+                    "tuning_time_seconds": st.session_state.get('tuning_time', None)
+                }
+                st.session_state.model_logger.log_iteration(iteration_data)
             
-            # Display metrics
-            col1, col2, col3, col4, col5 = st.columns(5)
-            col1.metric("MAE", f"{mae:.4f}")
-            col2.metric("MSE", f"{mse:.4f}")
-            col3.metric("RMSE", f"{rmse:.4f}")
-            col4.metric("R²", f"{r2:.4f}")
+                # Display metrics
+                col1, col2, col3, col4, col5 = st.columns(5)
+                col1.metric("MAE", f"{mae:.4f}")
+                col2.metric("MSE", f"{mse:.4f}")
+                col3.metric("RMSE", f"{rmse:.4f}")
+                col4.metric("R²", f"{r2:.4f}")
             
-            # Display tuning time if available
-            if 'tuning_time' in st.session_state and st.session_state.tuning_time is not None:
-                tuning_time_display = st.session_state.tuning_time
-                if tuning_time_display < 60:
-                    col5.metric("Tuning Time", f"{tuning_time_display:.2f}s")
+                # Display tuning time if available
+                if 'tuning_time' in st.session_state and st.session_state.tuning_time is not None:
+                    tuning_time_display = st.session_state.tuning_time
+                    if tuning_time_display < 60:
+                        col5.metric("Tuning Time", f"{tuning_time_display:.2f}s")
+                    else:
+                        minutes = int(tuning_time_display // 60)
+                        seconds = tuning_time_display % 60
+                        col5.metric("Tuning Time", f"{minutes}m {seconds:.0f}s")
                 else:
-                    minutes = int(tuning_time_display // 60)
-                    seconds = tuning_time_display % 60
-                    col5.metric("Tuning Time", f"{minutes}m {seconds:.0f}s")
-            else:
-                col5.metric("Tuning Time", "N/A")
+                    col5.metric("Tuning Time", "N/A")
 
-            # Add download button for logs
-            if len(st.session_state.model_logger.logs) > 0:
-                st.session_state.model_logger.save_logs()
+                # Add download button for logs
+                if len(st.session_state.model_logger.logs) > 0:
+                    st.session_state.model_logger.save_logs()
                 
-                # Read the CSV file and create a download button
-                with open('model_iterations.csv', 'r') as f:
+                    # Read the CSV file and create a download button
+                    with open('model_iterations.csv', 'r') as f:
+                        st.download_button(
+                            label="Download Model Iterations Log (CSV)",
+                            data=f.read(),
+                            file_name="model_iterations.csv",
+                            mime="text/csv"
+                        )
+                
+                    # Display the log as a table in the app
+                    st.subheader("Model Iteration History")
+                    log_df = st.session_state.model_logger.get_logs_df()
+                    st.dataframe(log_df)
+
+                # True vs Predicted Plot
+                st.subheader("True Vs Prediction Plot")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', 
+                                         marker=dict(color='blue', opacity=0.5),
+                                         name='Predicted vs True Values'))
+                fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()],
+                                         mode='lines', line=dict(color='black', dash='dash'),
+                                         name='1:1 Line'))
+                fig.update_layout(title='True vs Predicted Values',
+                                  xaxis_title='True Values',
+                                  yaxis_title='Predicted Values',
+                                  showlegend=True,
+                                  width=800,
+                                  height=600)
+                st.plotly_chart(fig)
+            
+                # Feature Importance
+                st.subheader("Feature Importance")
+            
+                # Show educational info for feature importance
+                if show_educational_info:
+                    with st.expander("📚 Understanding Feature Importance", expanded=False):
+                        st.markdown("""
+                        **Feature Importance** shows which variables most influence your model's predictions.
+                    
+                        - **Higher values** = More important features
+                        - **Lower values** = Less important features
+                    
+                        This helps you understand what drives your predictions and can guide feature selection for future models.
+                    
+                        [Learn more about Feature Importance](https://en.wikipedia.org/wiki/Feature_importance)
+                        """)
+            
+                importances = model_obj.feature_importances_ if hasattr(model_obj, 'feature_importances_') else permutation_importance(model_obj, X_train, y_train, n_repeats=10, random_state=42).importances_mean
+                indices = np.argsort(importances)[::-1]
+                names = [X_train.columns[i] for i in indices]
+                importance_values = [importances[i] for i in indices]
+
+                fig = go.Figure(go.Pie(labels=names, values=importance_values,
+                                       textinfo='label+percent', hole=0.3,
+                                       marker=dict(colors=plt.cm.Set3.colors, line=dict(color='white', width=2))))
+
+                fig.update_layout(title_text="Feature Importance", margin=dict(l=0, r=0, t=60, b=0))
+                st.plotly_chart(fig)
+            
+                # PDP Plots
+                st.subheader("PDP Plots")
+            
+                # Show educational info for PDP plots
+                if show_educational_info:
+                    with st.expander("📚 Understanding Partial Dependence Plots (PDP)", expanded=False):
+                        st.markdown("""
+                        **Partial Dependence Plots** show how each feature affects predictions while accounting for other features.
+                    
+                        - **X-axis**: Feature values
+                        - **Y-axis**: Average prediction
+                        - **Trend**: Shows if the feature has a positive, negative, or complex relationship with predictions
+                    
+                        [Learn more about Partial Dependence Plots](https://en.wikipedia.org/wiki/Partial_dependence_plot)
+                        """)
+            
+                with st.spinner("Generating PDP plots..."):
+                    num_features = len(X_train.columns)
+                    max_plots_per_row = 5
+                    num_rows = (num_features + max_plots_per_row - 1) // max_plots_per_row
+                    num_cols = min(num_features, max_plots_per_row)
+                    
+                    fig, axs = plt.subplots(num_rows, num_cols, figsize=(5 * num_cols, 5 * num_rows), constrained_layout=True)
+                    axs = axs.flatten() if num_features > 1 else [axs]
+                
+                    for j, selected_feature in enumerate(X_train.columns):
+                        features_info = {
+                            "features": [selected_feature],
+                            "kind": "average",
+                        }
+                
+                        display = PartialDependenceDisplay.from_estimator(
+                            model_obj,
+                            X_train,
+                            **features_info,
+                            ax=axs[j],
+                            line_kw={"lw": 3}
+                        )
+                
+                        axs[j].set_title(f"PDP for {selected_feature}")
+                        axs[j].set_xlabel(selected_feature)
+                        axs[j].set_ylabel(f"Partial Dependence for {target_column}")
+                        axs[j].set_facecolor('#f0f0f0')
+            
+                    fig.suptitle(f"Partial Dependence of {target_column} on Selected Features", y=1.02)
+                    plt.tight_layout()
+                    st.pyplot(fig)
+            
+                # Memory cleanup after PDP plots
+                plt.close('all')
+                gc.collect()
+
+                # SHAP Value Plot
+                st.subheader("SHAP Value Plot")
+            
+                # Show educational info for SHAP values
+                if show_educational_info:
+                    with st.expander("📚 Understanding SHAP Values", expanded=False):
+                        st.markdown("""
+                        **SHAP (SHapley Additive exPlanations)** values explain how each feature contributes to predictions.
+                    
+                        - **Red bars**: Features pushing predictions higher
+                        - **Blue bars**: Features pushing predictions lower
+                        - **Bar length**: Magnitude of feature's impact
+                        - **Position**: Feature value (high/low)
+                    
+                        This provides both global and local interpretability of your model.
+                    
+                        [Learn more about SHAP Values](https://en.wikipedia.org/wiki/Shapley_value)
+                        """)
+            
+                with st.spinner("Calculating SHAP values..."):
+                    explainer = shap.Explainer(model_obj, X_test)
+                    shap_values = explainer(X_test)
+            
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    shap.plots.beeswarm(shap_values, order=shap_values.abs.max(0))
+                    st.pyplot(fig)
+            
+                # Memory cleanup after SHAP calculations
+                plt.close('all')
+                gc.collect()
+
+                # Save Model
+                if st.button("Save Model"):
+                    model_filename = f"{best_model}_model.pkl"
+                    serialized_model = pickle.dumps(model_obj)
+            
                     st.download_button(
-                        label="Download Model Iterations Log (CSV)",
-                        data=f.read(),
-                        file_name="model_iterations.csv",
-                        mime="text/csv"
+                        label="Download Model",
+                        data=serialized_model,
+                        file_name=model_filename,
+                        mime="application/octet-stream",
                     )
-                
-                # Display the log as a table in the app
-                st.subheader("Model Iteration History")
-                log_df = st.session_state.model_logger.get_logs_df()
-                st.dataframe(log_df)
+            
+                    st.success(f"Model saved (available for download).")
 
-            # True vs Predicted Plot
-            st.subheader("True Vs Prediction Plot")
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', 
-                                     marker=dict(color='blue', opacity=0.5),
-                                     name='Predicted vs True Values'))
-            fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()],
-                                     mode='lines', line=dict(color='black', dash='dash'),
-                                     name='1:1 Line'))
-            fig.update_layout(title='True vs Predicted Values',
-                              xaxis_title='True Values',
-                              yaxis_title='Predicted Values',
-                              showlegend=True,
-                              width=800,
-                              height=600)
-            st.plotly_chart(fig)
-            
-            # Feature Importance
-            st.subheader("Feature Importance")
-            
-            # Show educational info for feature importance
-            if show_educational_info:
-                with st.expander("📚 Understanding Feature Importance", expanded=False):
-                    st.markdown("""
-                    **Feature Importance** shows which variables most influence your model's predictions.
-                    
-                    - **Higher values** = More important features
-                    - **Lower values** = Less important features
-                    
-                    This helps you understand what drives your predictions and can guide feature selection for future models.
-                    
-                    [Learn more about Feature Importance](https://en.wikipedia.org/wiki/Feature_importance)
-                    """)
-            
-            importances = model_obj.feature_importances_ if hasattr(model_obj, 'feature_importances_') else permutation_importance(model_obj, X_train, y_train, n_repeats=10, random_state=42).importances_mean
-            indices = np.argsort(importances)[::-1]
-            names = [X_train.columns[i] for i in indices]
-            importance_values = [importances[i] for i in indices]
-
-            fig = go.Figure(go.Pie(labels=names, values=importance_values,
-                                   textinfo='label+percent', hole=0.3,
-                                   marker=dict(colors=plt.cm.Set3.colors, line=dict(color='white', width=2))))
-
-            fig.update_layout(title_text="Feature Importance", margin=dict(l=0, r=0, t=60, b=0))
-            st.plotly_chart(fig)
-            
-            # PDP Plots
-            st.subheader("PDP Plots")
-            
-            # Show educational info for PDP plots
-            if show_educational_info:
-                with st.expander("📚 Understanding Partial Dependence Plots (PDP)", expanded=False):
-                    st.markdown("""
-                    **Partial Dependence Plots** show how each feature affects predictions while accounting for other features.
-                    
-                    - **X-axis**: Feature values
-                    - **Y-axis**: Average prediction
-                    - **Trend**: Shows if the feature has a positive, negative, or complex relationship with predictions
-                    
-                    [Learn more about Partial Dependence Plots](https://en.wikipedia.org/wiki/Partial_dependence_plot)
-                    """)
-            
-            with st.spinner("Generating PDP plots..."):
-                num_features = len(X_train.columns)
-                max_plots_per_row = 5
-                num_rows = (num_features + max_plots_per_row - 1) // max_plots_per_row
-                num_cols = min(num_features, max_plots_per_row)
-                    
-                fig, axs = plt.subplots(num_rows, num_cols, figsize=(5 * num_cols, 5 * num_rows), constrained_layout=True)
-                axs = axs.flatten() if num_features > 1 else [axs]
-                
-                for j, selected_feature in enumerate(X_train.columns):
-                    features_info = {
-                        "features": [selected_feature],
-                        "kind": "average",
-                    }
-                
-                    display = PartialDependenceDisplay.from_estimator(
-                        model_obj,
-                        X_train,
-                        **features_info,
-                        ax=axs[j],
-                        line_kw={"lw": 3}
-                    )
-                
-                    axs[j].set_title(f"PDP for {selected_feature}")
-                    axs[j].set_xlabel(selected_feature)
-                    axs[j].set_ylabel(f"Partial Dependence for {target_column}")
-                    axs[j].set_facecolor('#f0f0f0')
-            
-                fig.suptitle(f"Partial Dependence of {target_column} on Selected Features", y=1.02)
-                plt.tight_layout()
-                st.pyplot(fig)
-            
-            # Memory cleanup after PDP plots
-            plt.close('all')
-            gc.collect()
-
-            # SHAP Value Plot
-            st.subheader("SHAP Value Plot")
-            
-            # Show educational info for SHAP values
-            if show_educational_info:
-                with st.expander("📚 Understanding SHAP Values", expanded=False):
-                    st.markdown("""
-                    **SHAP (SHapley Additive exPlanations)** values explain how each feature contributes to predictions.
-                    
-                    - **Red bars**: Features pushing predictions higher
-                    - **Blue bars**: Features pushing predictions lower
-                    - **Bar length**: Magnitude of feature's impact
-                    - **Position**: Feature value (high/low)
-                    
-                    This provides both global and local interpretability of your model.
-                    
-                    [Learn more about SHAP Values](https://en.wikipedia.org/wiki/Shapley_value)
-                    """)
-            
-            with st.spinner("Calculating SHAP values..."):
-                explainer = shap.Explainer(model_obj, X_test)
-                shap_values = explainer(X_test)
-            
-                fig, ax = plt.subplots(figsize=(10, 6))
-                shap.plots.beeswarm(shap_values, order=shap_values.abs.max(0))
-                st.pyplot(fig)
-            
-            # Memory cleanup after SHAP calculations
-            plt.close('all')
-            gc.collect()
-
-            # Save Model
-            if st.button("Save Model"):
-                model_filename = f"{best_model}_model.pkl"
-                serialized_model = pickle.dumps(model_obj)
-            
-                st.download_button(
-                    label="Download Model",
-                    data=serialized_model,
-                    file_name=model_filename,
-                    mime="application/octet-stream",
-                )
-            
-                st.success(f"Model saved (available for download).")
-
+            else:
+                st.info(f"👉 Please click the **'⚡ Retrain & Tune {best_model}'** button above to train and optimize the model.")
         except Exception as e:
             st.error(f"Error during model training and evaluation: {str(e)}")
 
