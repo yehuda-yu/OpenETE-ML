@@ -1042,6 +1042,15 @@ if uploaded_file is not None:
                         
                         st.success(f"PCA applied successfully! Reduced from {total_cols_before} to {total_cols_after} features.")
                         st.session_state.data = reduced_data
+                        
+                        # Update features and target to match new data structure
+                        new_feature_cols = [col for col in reduced_data.columns 
+                                           if col != target_column and col not in categorical_columns]
+                        st.session_state.features = new_feature_cols
+                        st.session_state.target_column = target_column
+                        st.session_state.categorical_columns = [col for col in categorical_columns 
+                                                              if col in reduced_data.columns]
+                        
                         st.session_state.step4_done = True
                         
                         with st.expander("PCA Results"):
@@ -1065,6 +1074,15 @@ if uploaded_file is not None:
                             )
                         
                         st.success("Time Series Feature Extraction applied successfully!")
+                        
+                        # Update features and target to match new data structure
+                        new_feature_cols = [col for col in st.session_state.data.columns 
+                                           if col != target_column and col not in categorical_columns]
+                        st.session_state.features = new_feature_cols
+                        st.session_state.target_column = target_column
+                        st.session_state.categorical_columns = [col for col in categorical_columns 
+                                                              if col in st.session_state.data.columns]
+                        
                         st.session_state.step4_done = True
                         
                         with st.expander("Time Series-Based Feature Extraction Results"):
@@ -1088,6 +1106,15 @@ if uploaded_file is not None:
                             )
                         
                         st.success(f"t-SNE applied successfully! Reduced to {n_components} components.")
+                        
+                        # Update features and target to match new data structure
+                        new_feature_cols = [col for col in st.session_state.data.columns 
+                                           if col != target_column and col not in categorical_columns]
+                        st.session_state.features = new_feature_cols
+                        st.session_state.target_column = target_column
+                        st.session_state.categorical_columns = [col for col in categorical_columns 
+                                                              if col in st.session_state.data.columns]
+                        
                         st.session_state.step4_done = True
                         
                         with st.expander("t-SNE Results"):
@@ -1124,6 +1151,15 @@ if uploaded_file is not None:
                             )
                         
                         st.success(f"UMAP applied successfully! Reduced to {n_components} components.")
+                        
+                        # Update features and target to match new data structure
+                        new_feature_cols = [col for col in st.session_state.data.columns 
+                                           if col != target_column and col not in categorical_columns]
+                        st.session_state.features = new_feature_cols
+                        st.session_state.target_column = target_column
+                        st.session_state.categorical_columns = [col for col in categorical_columns 
+                                                              if col in st.session_state.data.columns]
+                        
                         st.session_state.step4_done = True
                         
                         with st.expander("UMAP Results"):
@@ -1291,6 +1327,14 @@ if uploaded_file is not None:
                         
                         st.success(f"{selection_method} applied successfully! Selected {num_features} features.")
                         
+                        # Update features and target to match new data structure
+                        new_feature_cols = [col for col in st.session_state.data.columns 
+                                           if col != target_column and col not in categorical_columns]
+                        st.session_state.features = new_feature_cols
+                        st.session_state.target_column = target_column
+                        st.session_state.categorical_columns = [col for col in categorical_columns 
+                                                              if col in st.session_state.data.columns]
+                        
                         # Clear previous model training state to force retraining with new features
                         st.session_state.state = {}
                         st.session_state.models_evaluated = False
@@ -1328,6 +1372,14 @@ if uploaded_file is not None:
                         
                         st.success(f"Boruta applied successfully! Selected {num_selected} relevant features (confirmed + tentative).")
                         st.info("ℹ️ Boruta selects ALL relevant features, not just a minimal set. This is different from RFE/SelectKBest.")
+                        
+                        # Update features and target to match new data structure
+                        new_feature_cols = [col for col in st.session_state.data.columns 
+                                           if col != target_column and col not in categorical_columns]
+                        st.session_state.features = new_feature_cols
+                        st.session_state.target_column = target_column
+                        st.session_state.categorical_columns = [col for col in categorical_columns 
+                                                              if col in st.session_state.data.columns]
                         
                         # Clear previous model training state to force retraining with new features
                         st.session_state.state = {}
